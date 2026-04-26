@@ -132,6 +132,11 @@ service_autostart_supported() {
         if [ -f "$(freebsd_service_file)" ] || [ -f "$(freebsd_rc_conf_file)" ]; then
           return 0
         fi
+
+        # 允许在 FreeBSD system 场景从 script 迁移到 freebsd-rc。
+        if [ "${INSTALL_SCOPE:-}" = "system" ] && is_root_user; then
+          return 0
+        fi
       fi
       return 1
       ;;
@@ -151,6 +156,15 @@ service_autostart_enable() {
       ;;
     script)
       if freebsd_rc_available; then
+        # 若仍是 script 且满足条件，先落地 rc.d 服务再开启自启动。
+        if [ "${INSTALL_SCOPE:-}" = "system" ] && is_root_user; then
+          if [ ! -f "$(freebsd_service_file)" ]; then
+            install_freebsd_entry
+          fi
+          freebsd_service_autostart_enable
+          return 0
+        fi
+
         if [ -f "$(freebsd_service_file)" ] || [ -f "$(freebsd_rc_conf_file)" ]; then
           freebsd_service_autostart_enable
           return 0
