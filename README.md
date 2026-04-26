@@ -3,14 +3,6 @@
 > 本 README 已切换为 **FreeBSD 部署与运维主文档**。  
 > 推荐内核：`mihomo`（`KERNEL_TYPE=mihomo`）。
 
-<p align="center">
-  <img src="resources/shell.png" width="100%">
-</p>
-
-<p align="center">
-  <img src="resources/ui.png" width="100%">
-</p>
-
 ## ✨ 核心特性
 
 - 自动识别架构并下载对应运行依赖
