@@ -47,6 +47,7 @@ Usage:
   doctor                         🩺 诊断环境与运行状态
   status                         🔍️ 查看状态总览
   boot                           🚦 管理开机代理接管
+  autostart                      🚦 管理 FreeBSD 内核开机自启
   log/logs                       📜 查看日志
   completion                     💡 导出 Bash / Zsh 补全脚本
 
@@ -76,6 +77,7 @@ usage_advanced() {
   boot on|off|status                 🚦 管理开机代理接管
   boot runtime on|off|status         🚦 仅管理内核开机自启
   boot proxy on|off|status           📜 仅管理开机代理保持
+  autostart on|off|status            🚦 管理 FreeBSD 内核开机自启
   upgrade                        🚀 升级当前或指定内核
   update                         🔄 更新项目代码
   completion bash|zsh            💡 导出 Shell 补全脚本
@@ -2735,7 +2737,7 @@ cmd_boot_runtime() {
     on)
       if ! service_autostart_supported; then
         die_state "当前后端不支持内核开机自启：$(runtime_backend 2>/dev/null || echo unknown)" \
-                  "如需开机自启，请使用 systemd / systemd-user 后端"
+                  "请使用 FreeBSD system 安装（freebsd-rc 后端）后再执行"
       fi
       service_autostart_enable || die_state "内核开机自启开启失败" "clashctl doctor"
       success "内核开机自启已开启"
@@ -2760,6 +2762,11 @@ cmd_boot_runtime() {
   esac
 
   print_boot_status
+}
+
+cmd_autostart() {
+  prepare
+  cmd_boot_runtime "$@"
 }
 
 cmd_boot_proxy() {
@@ -7331,6 +7338,7 @@ case "$cmd" in
   status)         cmd_status "$@" ;;
   status-next)    cmd_status_next "$@" ;;
   boot)           cmd_boot "$@" ;;
+  autostart)      cmd_autostart "$@" ;;
   log|logs)       cmd_logs "$@" ;;
   doctor)         cmd_doctor "$@" ;;
   ui)             cmd_ui "$@" ;;

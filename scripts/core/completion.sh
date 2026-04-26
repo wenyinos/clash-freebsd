@@ -153,6 +153,17 @@ _clash_freebsd_complete_boot() {
   esac
 }
 
+_clash_freebsd_complete_autostart() {
+  local cur="$1"
+  local rel_index="$2"
+
+  COMPREPLY=()
+
+  if [ "$rel_index" -eq 1 ]; then
+    _clash_freebsd_add_matches "$cur" on off status
+  fi
+}
+
 _clash_freebsd_complete_config() {
   local cur="$1"
   local rel_index="$2"
@@ -304,7 +315,7 @@ _clash_freebsd_complete_top_level() {
   COMPREPLY=()
   _clash_freebsd_add_matches "$cur" \
     add use ls health select on off status status-next \
-    boot log logs doctor ui secret tun dev config mixin \
+    boot autostart log logs doctor ui secret tun dev config mixin \
     relay profile sub proxy upgrade update completion help \
     -h --help
 }
@@ -367,6 +378,7 @@ _clash_freebsd_complete_command() {
     health) _clash_freebsd_complete_health "$cur" ;;
     status) _clash_freebsd_complete_status "$cur" ;;
     boot) _clash_freebsd_complete_boot "$cur" "$rel_index" "$arg1" ;;
+    autostart) _clash_freebsd_complete_autostart "$cur" "$rel_index" ;;
     config) _clash_freebsd_complete_config "$cur" "$rel_index" "$arg1" ;;
     mixin) _clash_freebsd_complete_mixin "$cur" "$rel_index" ;;
     relay) _clash_freebsd_complete_relay "$cur" "$rel_index" "$arg1" ;;
