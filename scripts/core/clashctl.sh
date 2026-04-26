@@ -17,8 +17,6 @@ source "$PROJECT_DIR/scripts/core/completion.sh"
 source "$PROJECT_DIR/scripts/core/proxy.sh"
 source "$PROJECT_DIR/scripts/core/update.sh"
 source "$PROJECT_DIR/scripts/init/freebsd.sh"
-source "$PROJECT_DIR/scripts/init/systemd.sh"
-source "$PROJECT_DIR/scripts/init/systemd-user.sh"
 source "$PROJECT_DIR/scripts/init/script.sh"
 
 usage() {

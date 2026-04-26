@@ -46,16 +46,6 @@ install_runtime_entry() {
     return 0
   fi
 
-  if [ "$INSTALL_SCOPE" = "system" ] && systemd_available; then
-    install_systemd_entry
-    return 0
-  fi
-
-  if [ "$INSTALL_SCOPE" = "user" ] && systemd_user_available; then
-    install_systemd_user_entry
-    return 0
-  fi
-
   install_script_entry
 }
 
@@ -66,12 +56,6 @@ remove_runtime_entry() {
   case "$backend" in
     freebsd-rc)
       remove_freebsd_entry
-      ;;
-    systemd)
-      remove_systemd_entry
-      ;;
-    systemd-user)
-      remove_systemd_user_entry
       ;;
     script)
       remove_script_entry
@@ -91,12 +75,6 @@ service_start() {
     freebsd-rc)
       freebsd_service_start
       ;;
-    systemd)
-      systemd_service_start
-      ;;
-    systemd-user)
-      systemd_user_service_start
-      ;;
     script)
       script_service_start
       ;;
@@ -113,12 +91,6 @@ service_stop() {
   case "$backend" in
     freebsd-rc)
       freebsd_service_stop
-      ;;
-    systemd)
-      systemd_service_stop
-      ;;
-    systemd-user)
-      systemd_user_service_stop
       ;;
     script)
       script_service_stop
@@ -137,12 +109,6 @@ service_restart() {
     freebsd-rc)
       freebsd_service_restart
       ;;
-    systemd)
-      systemd_service_restart
-      ;;
-    systemd-user)
-      systemd_user_service_restart
-      ;;
     script)
       script_service_restart
       ;;
@@ -154,7 +120,7 @@ service_restart() {
 
 service_autostart_supported() {
   case "$(runtime_backend)" in
-    freebsd-rc|systemd|systemd-user)
+    freebsd-rc)
       return 0
       ;;
     *)
@@ -170,12 +136,6 @@ service_autostart_enable() {
   case "$backend" in
     freebsd-rc)
       freebsd_service_autostart_enable
-      ;;
-    systemd)
-      systemd_service_autostart_enable
-      ;;
-    systemd-user)
-      systemd_user_service_autostart_enable
       ;;
     script)
       write_runtime_value "RUNTIME_BOOT_AUTOSTART" "false"
@@ -196,12 +156,6 @@ service_autostart_disable() {
     freebsd-rc)
       freebsd_service_autostart_disable
       ;;
-    systemd)
-      systemd_service_autostart_disable
-      ;;
-    systemd-user)
-      systemd_user_service_autostart_disable
-      ;;
     script)
       write_runtime_value "RUNTIME_BOOT_AUTOSTART" "false"
       write_runtime_value "RUNTIME_BOOT_AUTOSTART_EXPLICIT" "true"
@@ -221,12 +175,6 @@ service_autostart_status() {
     freebsd-rc)
       freebsd_service_autostart_status
       ;;
-    systemd)
-      systemd_service_autostart_status
-      ;;
-    systemd-user)
-      systemd_user_service_autostart_status
-      ;;
     script)
       echo "unsupported"
       ;;
@@ -243,12 +191,6 @@ service_is_running() {
   case "$backend" in
     freebsd-rc)
       service "$(freebsd_service_name)" onestatus >/dev/null 2>&1
-      ;;
-    systemd)
-      systemctl is-active --quiet "$(service_unit_name)"
-      ;;
-    systemd-user)
-      systemctl --user is-active --quiet "$(service_unit_name)"
       ;;
     script)
       if [ -f "$RUNTIME_DIR/mihomo.pid" ]; then
@@ -272,12 +214,6 @@ service_status_text() {
     freebsd-rc)
       freebsd_service_status_text
       ;;
-    systemd)
-      systemd_service_status_text
-      ;;
-    systemd-user)
-      systemd_user_service_status_text
-      ;;
     script)
       script_service_status_text
       ;;
@@ -294,12 +230,6 @@ service_logs() {
   case "$backend" in
     freebsd-rc)
       freebsd_service_logs
-      ;;
-    systemd)
-      systemd_service_logs
-      ;;
-    systemd-user)
-      systemd_user_service_logs
       ;;
     script)
       script_service_logs

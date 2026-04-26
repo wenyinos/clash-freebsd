@@ -8,8 +8,6 @@ source "$PROJECT_DIR/scripts/core/common.sh"
 source "$PROJECT_DIR/scripts/core/runtime.sh"
 source "$PROJECT_DIR/scripts/core/config.sh"
 source "$PROJECT_DIR/scripts/init/freebsd.sh"
-source "$PROJECT_DIR/scripts/init/systemd.sh"
-source "$PROJECT_DIR/scripts/init/systemd-user.sh"
 source "$PROJECT_DIR/scripts/init/script.sh"
 
 init_project_context "$PROJECT_DIR"

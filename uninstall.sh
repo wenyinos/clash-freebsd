@@ -29,10 +29,6 @@ source "$PROJECT_DIR/scripts/core/runtime.sh"
 source "$PROJECT_DIR/scripts/core/config.sh"
 # shellcheck source=scripts/init/freebsd.sh
 source "$PROJECT_DIR/scripts/init/freebsd.sh"
-# shellcheck source=scripts/init/systemd.sh
-source "$PROJECT_DIR/scripts/init/systemd.sh"
-# shellcheck source=scripts/init/systemd-user.sh
-source "$PROJECT_DIR/scripts/init/systemd-user.sh"
 # shellcheck source=scripts/init/script.sh
 source "$PROJECT_DIR/scripts/init/script.sh"
 
