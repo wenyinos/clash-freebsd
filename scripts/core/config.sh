@@ -2143,7 +2143,7 @@ apply_mixin_append_arrays() {
 
 apply_runtime_mixin() {
   local runtime_file="$1"
-  local mixin_file_path
+  local mixin_file_path override_err override_detail
 
   [ -s "$runtime_file" ] || die "待应用 mixin 的配置文件不存在：$runtime_file"
 
@@ -2155,10 +2155,16 @@ apply_runtime_mixin() {
 
   build_debug "mixin: override"
   if ! apply_mixin_override "$runtime_file" 2>"$(config_tmp_dir)/mixin-override.err"; then
+    override_err="$(cat "$(config_tmp_dir)/mixin-override.err" 2>/dev/null || true)"
+    override_detail="mixin override: ${override_err}"
+    if permission_denied_requires_root_or_sudo "$override_err"; then
+      override_detail="${override_detail}
+hint: 检测到权限不足，请通过 root 用户或 sudo 重新运行"
+    fi
     write_compile_error_with_detail \
       "其他运行配置 YAML 解析失败：$(display_config_path "$runtime_file")" \
       "$runtime_file" \
-      "mixin override: $(cat "$(config_tmp_dir)/mixin-override.err" 2>/dev/null || true)"
+      "$override_detail"
     rm -f "$(config_tmp_dir)/mixin-override.err" 2>/dev/null || true
     return 1
   fi
