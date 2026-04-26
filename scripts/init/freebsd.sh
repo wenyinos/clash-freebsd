@@ -13,7 +13,7 @@ freebsd_rc_conf_file() {
 }
 
 freebsd_require_root() {
-  is_root_user || die "FreeBSD rc.d 模式需要 root 权限"
+  is_root_user || die_state "FreeBSD rc.d 模式需要 root 权限" "请通过 root 用户或 sudo 重新运行"
 }
 
 write_freebsd_autostart_value() {
