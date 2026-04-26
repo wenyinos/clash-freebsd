@@ -153,36 +153,6 @@ system_proxy_disable() {
   write_runtime_value "RUNTIME_BOOT_PROXY_KEEP" "false"
 }
 
-boot_proxy_keep_status() {
-  local status
-  status="$(system_proxy_status 2>/dev/null || echo off)"
-
-  if [ "$status" = "on" ]; then
-    echo "on"
-    return 0
-  fi
-
-  if ! system_proxy_supported; then
-    echo "unsupported"
-    return 0
-  fi
-
-  echo "off"
-}
-
-boot_proxy_keep_enable() {
-  system_proxy_enable
-}
-
-boot_proxy_keep_disable() {
-  if ! system_proxy_supported && [ "$(system_proxy_status 2>/dev/null || echo off)" = "off" ]; then
-    write_runtime_value "RUNTIME_BOOT_PROXY_KEEP" "false"
-    return 0
-  fi
-
-  system_proxy_disable
-}
-
 print_proxy_show() {
   local status
   status="$(system_proxy_status)"

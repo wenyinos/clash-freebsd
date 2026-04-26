@@ -19,10 +19,7 @@ clashon / clashoff
 clashctl add|use|select|ls
 clashctl status|doctor|logs
 clashctl tun on|off|doctor
-clashctl boot on|off|status
 clashctl autostart on|off|status
-clashctl boot runtime on|off|status
-clashctl boot proxy on|off|status
 clashctl config regen
 clashctl update|upgrade
 ```
@@ -78,15 +75,7 @@ service clash_freebsd stop
 service clash_freebsd restart
 ```
 
-开机代理接管（推荐）：
-
-```sh
-clashctl boot on
-clashctl boot status
-clashctl boot off
-```
-
-仅管理内核服务开机自启：
+管理内核服务开机自启：
 
 ```sh
 clashctl autostart on
@@ -94,19 +83,8 @@ clashctl autostart status
 clashctl autostart off
 ```
 
-仅管理开机代理保持：
-
-```sh
-clashctl boot proxy on
-clashctl boot proxy status
-clashctl boot proxy off
-```
-
 说明：
-- `clashctl boot on` = 同时开启“内核开机自启”与“开机代理保持”。
 - `clashctl autostart on` 只影响 rc.d 服务是否随系统启动。
-- `clashctl boot runtime on` 与 `clashctl autostart on` 等价（兼容旧写法）。
-- `clashctl boot proxy on` 只影响开机后代理环境变量是否保持。
 - FreeBSD 自启配置文件：`/etc/rc.conf.d/clash_freebsd`。
 
 ## 4. Tun 与路由诊断（FreeBSD）
@@ -186,14 +164,13 @@ clashctl status
 ### 7.4 开机自启与服务验收
 
 ```sh
-clashctl boot on
-clashctl boot status
+clashctl autostart on
+clashctl autostart status
 service clash_freebsd status
 ```
 
 验收要点：
-- `clashctl boot status` 中“内核开机自启”为 `on`
-- `clashctl boot status` 中“开机代理保持”为 `on`
+- `clashctl autostart status` 为 `on`
 - `service clash_freebsd status` 显示运行中
 - `clashctl status` 显示控制器可访问
 

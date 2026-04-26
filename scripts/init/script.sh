@@ -119,9 +119,21 @@ service_restart() {
 }
 
 service_autostart_supported() {
-  case "$(runtime_backend)" in
+  local backend
+  backend="$(runtime_backend)"
+
+  case "$backend" in
     freebsd-rc)
       return 0
+      ;;
+    script)
+      # 兼容历史/异常状态：后端记录为 script，但 FreeBSD rc.d 已安装。
+      if freebsd_rc_available; then
+        if [ -f "$(freebsd_service_file)" ] || [ -f "$(freebsd_rc_conf_file)" ]; then
+          return 0
+        fi
+      fi
+      return 1
       ;;
     *)
       return 1
@@ -138,6 +150,12 @@ service_autostart_enable() {
       freebsd_service_autostart_enable
       ;;
     script)
+      if freebsd_rc_available; then
+        if [ -f "$(freebsd_service_file)" ] || [ -f "$(freebsd_rc_conf_file)" ]; then
+          freebsd_service_autostart_enable
+          return 0
+        fi
+      fi
       write_runtime_value "RUNTIME_BOOT_AUTOSTART" "false"
       write_runtime_value "RUNTIME_BOOT_AUTOSTART_EXPLICIT" "true"
       return 2
@@ -157,6 +175,12 @@ service_autostart_disable() {
       freebsd_service_autostart_disable
       ;;
     script)
+      if freebsd_rc_available; then
+        if [ -f "$(freebsd_service_file)" ] || [ -f "$(freebsd_rc_conf_file)" ]; then
+          freebsd_service_autostart_disable
+          return 0
+        fi
+      fi
       write_runtime_value "RUNTIME_BOOT_AUTOSTART" "false"
       write_runtime_value "RUNTIME_BOOT_AUTOSTART_EXPLICIT" "true"
       return 2
@@ -176,6 +200,12 @@ service_autostart_status() {
       freebsd_service_autostart_status
       ;;
     script)
+      if freebsd_rc_available; then
+        if [ -f "$(freebsd_service_file)" ] || [ -f "$(freebsd_rc_conf_file)" ]; then
+          freebsd_service_autostart_status
+          return 0
+        fi
+      fi
       echo "unsupported"
       ;;
     *)

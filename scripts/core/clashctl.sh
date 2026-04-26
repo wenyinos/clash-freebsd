@@ -46,7 +46,6 @@ Usage:
 🩺 Diagnose:
   doctor                         🩺 诊断环境与运行状态
   status                         🔍️ 查看状态总览
-  boot                           🚦 管理开机代理接管
   autostart                      🚦 管理 FreeBSD 内核开机自启
   log/logs                       📜 查看日志
   completion                     💡 导出 Bash / Zsh 补全脚本
@@ -74,9 +73,6 @@ usage_advanced() {
   tun log/logs                       📜 查看日志
 
 🚀 Lifecycle:
-  boot on|off|status                 🚦 管理开机代理接管
-  boot runtime on|off|status         🚦 仅管理内核开机自启
-  boot proxy on|off|status           📜 仅管理开机代理保持
   autostart on|off|status            🚦 管理 FreeBSD 内核开机自启
   upgrade                        🚀 升级当前或指定内核
   update                         🔄 更新项目代码
@@ -2137,8 +2133,7 @@ connectivity_evidence_lines() {
   echo "• system_proxy_supported = ${system_proxy_supported_text:-false}"
   echo "• system_proxy_enabled = ${system_proxy_state:-off}"
   echo "• runtime_backend = $(runtime_backend 2>/dev/null || echo unknown)"
-  echo "• boot_runtime_autostart = $(status_service_autostart_text)"
-  echo "• boot_proxy_keep = $(status_boot_proxy_keep_text)"
+  echo "• runtime_autostart = $(status_service_autostart_text)"
   [ -n "${actual_proxy:-}" ] && echo "• system_proxy_http = ${actual_proxy}"
 
   if [ -n "${expected_proxy:-}" ]; then
@@ -2192,51 +2187,6 @@ status_runtime_backend_reason_text() {
 
 status_service_autostart_text() {
   service_autostart_status 2>/dev/null || echo "unknown"
-}
-
-status_boot_proxy_keep_text() {
-  boot_proxy_keep_status 2>/dev/null || echo "unknown"
-}
-
-status_boot_auto_proxy_text() {
-  local runtime_autostart proxy_keep
-
-  runtime_autostart="$(status_service_autostart_text)"
-  proxy_keep="$(status_boot_proxy_keep_text)"
-
-  if [ "$runtime_autostart" = "on" ] && [ "$proxy_keep" = "on" ]; then
-    echo "on"
-  else
-    echo "off"
-  fi
-}
-
-status_boot_boundary_text() {
-  local backend proxy_keep text
-
-  backend="$(runtime_backend 2>/dev/null || echo unknown)"
-  proxy_keep="$(status_boot_proxy_keep_text)"
-
-  case "$backend" in
-    systemd)
-      text="systemd 支持内核开机自启；开机代理保持由 /etc/environment 的代理块决定"
-      ;;
-    systemd-user)
-      text="systemd-user 支持用户登录后自启；开机代理保持仍由 /etc/environment 的代理块决定"
-      ;;
-    script)
-      text="script 后端不支持内核开机自启；只能查看或清理系统代理持久块"
-      ;;
-    *)
-      text="未知后端，无法确认开机自启边界"
-      ;;
-  esac
-
-  if [ "$proxy_keep" = "unsupported" ]; then
-    text="${text}；当前环境不可写系统代理持久文件"
-  fi
-
-  echo "$text"
 }
 
 status_container_mode_text() {
@@ -2396,8 +2346,6 @@ print_status_summary_compact() {
   echo "🔧 Profile：$profile"
   echo "🔧 运行后端：$(status_runtime_backend_text)"
   echo "🚦 内核开机自启：$(status_service_autostart_text)"
-  echo "📜 开机代理保持：$(status_boot_proxy_keep_text)"
-  echo "🐱 开机代理接管：$(status_boot_auto_proxy_text)"
   echo "🧪 环境模式：$(status_container_mode_text)"
   echo "🧪 Tun 状态：${tun_text:-未知}"
   echo "📜 系统代理状态：${system_proxy_text}"
@@ -2574,9 +2522,6 @@ print_status_summary_verbose() {
   echo "🔧 运行后端：${install_backend_text:-unknown}"
   echo "💡 后端原因：$(status_runtime_backend_reason_text 2>/dev/null || echo unknown)"
   echo "🚦 内核开机自启：$(status_service_autostart_text)"
-  echo "📜 开机代理保持：$(status_boot_proxy_keep_text)"
-  echo "🐱 开机代理接管：$(status_boot_auto_proxy_text)"
-  echo "💡 开机边界：$(status_boot_boundary_text)"
   echo "🧪 环境模式：${install_container_text:-unknown}"
   echo "🧩 安装验证：${install_verify_text:-unknown}"
   echo "📜 端口裁决：${port_adjustment_text:-unknown}"
@@ -2711,28 +2656,9 @@ cmd_status_next() {
   system_state_default_action
 }
 
-boot_usage() {
-  cat <<EOF
-📜 用法：
-  clashctl boot status
-  clashctl boot on
-  clashctl boot off
-  clashctl boot runtime on|off|status
-  clashctl boot proxy on|off|status
-EOF
-}
+cmd_autostart() {
+  prepare
 
-print_boot_status() {
-  ui_title "🚦 开机代理接管"
-  ui_kv "🔧" "运行后端" "$(runtime_backend 2>/dev/null || echo unknown)"
-  ui_kv "🚦" "内核开机自启" "$(status_service_autostart_text)"
-  ui_kv "📜" "开机代理保持" "$(status_boot_proxy_keep_text)"
-  ui_kv "🐱" "开机代理接管" "$(status_boot_auto_proxy_text)"
-  ui_kv "💡" "后端边界" "$(status_boot_boundary_text)"
-  ui_blank
-}
-
-cmd_boot_runtime() {
   case "${1:-status}" in
     on)
       if ! service_autostart_supported; then
@@ -2757,97 +2683,14 @@ cmd_boot_runtime() {
       return 0
       ;;
     *)
-      die_usage "未知的 boot runtime 参数：$1" "clashctl boot runtime on|off|status"
+      die_usage "未知的 autostart 参数：$1" "clashctl autostart on|off|status"
       ;;
   esac
 
-  print_boot_status
-}
-
-cmd_autostart() {
-  prepare
-  cmd_boot_runtime "$@"
-}
-
-cmd_boot_proxy() {
-  local backend
-  backend="$(runtime_backend 2>/dev/null || echo unknown)"
-
-  case "${1:-status}" in
-    on)
-      if [ "$backend" = "script" ]; then
-        ui_warn "script 后端不会开机启动内核；仅保持系统代理变量可能在重启后指向未运行的本地端口"
-      fi
-      boot_proxy_keep_enable || die_state "开机代理保持开启失败：当前环境不支持写入 $(system_proxy_env_file)" \
-                                      "请检查权限，或执行 clashctl doctor"
-      success "开机代理保持已开启"
-      ;;
-    off)
-      boot_proxy_keep_disable || die_state "开机代理保持关闭失败：无法清理 $(system_proxy_env_file)" \
-                                       "请检查权限，或执行 clashctl doctor"
-      success "开机代理保持已关闭"
-      ;;
-    status)
-      echo "$(status_boot_proxy_keep_text)"
-      return 0
-      ;;
-    *)
-      die_usage "未知的 boot proxy 参数：$1" "clashctl boot proxy on|off|status"
-      ;;
-  esac
-
-  print_boot_status
-}
-
-cmd_boot() {
-  prepare
-
-  case "${1:-status}" in
-    on)
-      if ! service_autostart_supported; then
-        die_state "当前后端不支持开机自动进入代理状态：$(runtime_backend 2>/dev/null || echo unknown)" \
-                  "script 后端只能手动启动；可执行 clashctl boot proxy off 清理开机代理保持"
-      fi
-      boot_proxy_keep_enable || die_state "开机代理保持开启失败：当前环境不支持写入 $(system_proxy_env_file)" \
-                                      "请检查权限，或执行 clashctl doctor"
-      if ! service_autostart_enable; then
-        boot_proxy_keep_disable >/dev/null 2>&1 || true
-        die_state "内核开机自启开启失败" "clashctl doctor"
-      fi
-      success "开机代理接管已开启"
-      print_boot_status
-      ;;
-    off)
-      if service_autostart_supported; then
-        service_autostart_disable || die_state "内核开机自启关闭失败" "clashctl doctor"
-      else
-        write_runtime_value "RUNTIME_BOOT_AUTOSTART" "false"
-        write_runtime_value "RUNTIME_BOOT_AUTOSTART_EXPLICIT" "true"
-        ui_warn "当前后端不支持内核开机自启，跳过服务 disable：$(runtime_backend 2>/dev/null || echo unknown)"
-      fi
-      boot_proxy_keep_disable || die_state "开机代理保持关闭失败：无法清理 $(system_proxy_env_file)" \
-                                       "请检查权限，或执行 clashctl doctor"
-      success "开机代理接管已关闭"
-      print_boot_status
-      ;;
-    status)
-      print_boot_status
-      ;;
-    runtime)
-      shift || true
-      cmd_boot_runtime "$@"
-      ;;
-    proxy)
-      shift || true
-      cmd_boot_proxy "$@"
-      ;;
-    -h|--help|help)
-      boot_usage
-      ;;
-    *)
-      die_usage "未知的 boot 子命令：$1" "clashctl boot on|off|status"
-      ;;
-  esac
+  ui_title "🚦 内核开机自启"
+  ui_kv "🔧" "运行后端" "$(runtime_backend 2>/dev/null || echo unknown)"
+  ui_kv "🚦" "当前状态" "$(status_service_autostart_text)"
+  ui_blank
 }
 
 url_host_bracket_if_needed() {
@@ -3472,9 +3315,6 @@ doctor_service() {
   backend="$(runtime_backend)"
   doctor_ok "运行后端：$backend"
   doctor_ok "内核开机自启：$(status_service_autostart_text)"
-  doctor_ok "开机代理保持：$(status_boot_proxy_keep_text)"
-  doctor_ok "开机代理接管：$(status_boot_auto_proxy_text)"
-  doctor_ok "开机边界：$(status_boot_boundary_text)"
 
   case "$backend" in
     systemd)
@@ -7337,7 +7177,6 @@ case "$cmd" in
   off)            cmd_off "$@" ;;
   status)         cmd_status "$@" ;;
   status-next)    cmd_status_next "$@" ;;
-  boot)           cmd_boot "$@" ;;
   autostart)      cmd_autostart "$@" ;;
   log|logs)       cmd_logs "$@" ;;
   doctor)         cmd_doctor "$@" ;;
