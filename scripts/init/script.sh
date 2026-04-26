@@ -206,7 +206,7 @@ service_autostart_status() {
           return 0
         fi
       fi
-      echo "unsupported"
+      echo "off"
       ;;
     *)
       echo "unknown"
