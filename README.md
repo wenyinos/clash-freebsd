@@ -173,44 +173,9 @@ bash uninstall.sh --purge-runtime
 - [ ] 预留端口：`7890`（mixed）、`9090`（controller）、`1053`（dns 可选）
 - [ ] 已确认内核：`mihomo`
 
-### 7.2 一次性部署命令
 
-```sh
-pkg update
-pkg install -y bash curl unzip gtar gzip
 
-git clone --branch master --depth 1 https://github.com/wenyinos/clash-freebsd.git
-cd clash-freebsd
-
-export KERNEL_TYPE=mihomo
-bash install.sh
-```
-
-### 7.3 首次上线动作
-
-```sh
-clashctl add <订阅链接> <名称>
-clashctl use
-clashctl select
-clashon
-clashctl doctor
-clashctl status
-```
-
-### 7.4 开机自启与服务验收
-
-```sh
-clashctl autostart on
-clashctl autostart status
-service clash_freebsd status
-```
-
-验收要点：
-- `clashctl autostart status` 为 `on`
-- `service clash_freebsd status` 显示运行中
-- `clashctl status` 显示控制器可访问
-
-### 7.5 PF 最小放行示例（可选）
+### 7.2 PF 最小放行示例（可选）
 
 ```pf
 pass in inet proto tcp from any to any port { 7890, 9090 }
@@ -221,7 +186,7 @@ pass in inet proto udp from any to any port { 1053 }
 sockstat -4 -l | egrep '7890|9090|1053'
 ```
 
-### 7.6 日常巡检命令
+### 7.3 日常巡检命令
 
 ```sh
 clashctl status
@@ -229,14 +194,6 @@ clashctl doctor
 clashctl logs mihomo
 route -n get default
 netstat -rn -f inet
-```
-
-### 7.7 回滚/应急
-
-```sh
-clashoff
-service clash_freebsd stop
-clashctl autostart off
 ```
 
 彻底回收：
@@ -258,20 +215,7 @@ bash uninstall.sh --purge-runtime
 - [ ] UDP 入站：`1053`（启用 DNS 接管时）
 - [ ] 出站允许访问 GitHub/订阅地址
 
-主机侧：
-- [ ] `pkg update && pkg install -y bash curl unzip gtar gzip`
-- [ ] `export KERNEL_TYPE=mihomo && bash install.sh`
-- [ ] 完成 `clashctl add/use/select`
-- [ ] `clashctl autostart on`
 
-上线验收：
-
-```sh
-sockstat -4 -l | egrep '22|7890|9090|1053'
-service clash_freebsd status
-clashctl status
-clashctl doctor
-```
 
 ### 8.2 Vultr 模板
 
