@@ -1339,7 +1339,7 @@ write_env_value() {
   local value="$2"
   local file="$PROJECT_DIR/.env"
 
-  touch "$file"
+  ensure_kv_file_writable_or_die "$file"
 
   if grep -qE "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file"; then
     awk -v k="$key" -v v="$value" '
@@ -1348,7 +1348,7 @@ write_env_value() {
         next
       }
       { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
   else
     printf 'export %s="%s"\n' "$key" "$value" >> "$file"
   fi
@@ -1365,11 +1365,12 @@ unset_env_value() {
   local key="$1"
   local file="$PROJECT_DIR/.env"
   [ -f "$file" ] || return 0
+  ensure_kv_file_writable_or_die "$file"
 
   awk -v k="$key" '
     $0 ~ "^[[:space:]]*(export[[:space:]]+)?" k "=" { next }
     { print }
-  ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+  ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
 }
 
 subscription_auto_update_enabled() {

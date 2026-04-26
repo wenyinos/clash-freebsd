@@ -81,6 +81,28 @@ sudo clashctl autostart on
 sudo clashctl autostart status
 ```
 
+### 1.2 sudo 导致文件属主漂移（.env / runtime）
+
+现象（示例）：
+
+```text
+touch: /home/zemin/clash-freebsd/runtime/runtime-events.env: Permission denied
+override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
+```
+
+原因：使用 `sudo clashctl ...` 执行会把 `.env` 或 `runtime/*` 写成 `root` 属主，后续普通用户执行会权限不足。
+
+建议：
+- 仅对必须 root 的命令使用 `sudo`（如 `service`、`autostart`、`tun on/off`）。
+- 其他命令（如 `clashctl config regen`、`clashctl secret`、`clashctl logs`）优先使用普通用户执行。
+
+修复属主（一次性）：
+
+```sh
+sudo chown zemin:zemin /home/zemin/clash-freebsd/.env
+sudo chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
+```
+
 ## 2. 安装与初始化
 
 ```sh
