@@ -29,6 +29,12 @@ clashctl update|upgrade
 
 ## 1. 环境准备
 
+FreeBSD 默认登录 Shell 可能不是 `bash`，执行以下命令前请先切换到 `bash`：
+
+```sh
+bash
+```
+
 建议使用 `root` 或具备 `sudo` 权限账号。
 
 ```sh
