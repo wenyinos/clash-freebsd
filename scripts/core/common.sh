@@ -1058,7 +1058,7 @@ ensure_openwrt_install_supported() {
 
   if ! openwrt_project_dir_is_persistent; then
     die_state "OpenWrt 上当前项目目录位于易失路径：$PROJECT_DIR" \
-              "请将项目放到持久化目录（例如 /root/clash-for-linux 或 /opt/clash-for-linux）后重新执行 bash install.sh"
+              "请将项目放到持久化目录（例如 /root/clash-freebsd 或 /opt/clash-freebsd）后重新执行 bash install.sh"
   fi
 }
 
@@ -1085,9 +1085,9 @@ detect_install_scope() {
   esac
 
   if [ "$INSTALL_SCOPE" = "system" ]; then
-    INSTALL_HOME="${CLASH_INSTALL_HOME:-/opt/clash-for-linux}"
+    INSTALL_HOME="${CLASH_INSTALL_HOME:-/opt/clash-freebsd}"
   else
-    INSTALL_HOME="${CLASH_INSTALL_HOME:-$HOME/.local/share/clash-for-linux}"
+    INSTALL_HOME="${CLASH_INSTALL_HOME:-$HOME/.local/share/clash-freebsd}"
   fi
 
   RUNTIME_DIR="$PROJECT_DIR/runtime"
@@ -1282,6 +1282,7 @@ get_os() {
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   case "$os" in
     linux) echo "linux" ;;
+    freebsd) echo "freebsd" ;;
     *) die "暂不支持的操作系统：$os" ;;
   esac
 }
@@ -1783,8 +1784,17 @@ runtime_config_tun_auto_detect_interface() {
 }
 
 default_route_dev() {
-  has_ip_command || return 1
-  ip route show default 2>/dev/null | awk '/^default/ {for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1); exit}}'
+  if has_ip_command; then
+    ip route show default 2>/dev/null | awk '/^default/ {for(i=1;i<=NF;i++) if($i=="dev") {print $(i+1); exit}}'
+    return $?
+  fi
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] && command -v route >/dev/null 2>&1; then
+    route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}'
+    return $?
+  fi
+
+  return 1
 }
 
 default_route_is_tun_like() {
@@ -1864,16 +1874,53 @@ systemd_user_available() {
   command -v systemctl >/dev/null 2>&1 && systemctl --user list-unit-files >/dev/null 2>&1
 }
 
+freebsd_rc_available() {
+  [ "$(get_os 2>/dev/null || true)" = "freebsd" ] || return 1
+  command -v service >/dev/null 2>&1 || return 1
+  [ -d /usr/local/etc/rc.d ]
+}
+
 is_root_user() {
   [ "$(id -u)" -eq 0 ]
 }
 
 tun_device_exists() {
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+    if [ -c /dev/tun ]; then
+      return 0
+    fi
+
+    find /dev -maxdepth 1 -type c -name 'tun*' 2>/dev/null | grep -q .
+    return $?
+  fi
+
   [ -c /dev/net/tun ]
 }
 
 tun_device_readable() {
+  local dev
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+    if [ -c /dev/tun ]; then
+      dev="/dev/tun"
+    else
+      dev="$(find /dev -maxdepth 1 -type c -name 'tun*' 2>/dev/null | head -n 1 || true)"
+    fi
+
+    [ -n "${dev:-}" ] || return 1
+    [ -r "$dev" ] && [ -w "$dev" ]
+    return $?
+  fi
+
   [ -r /dev/net/tun ] && [ -w /dev/net/tun ]
+}
+
+tun_device_path_hint() {
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+    echo "/dev/tun*"
+  else
+    echo "/dev/net/tun"
+  fi
 }
 
 container_env_type() {
@@ -2085,6 +2132,11 @@ decide_install_backend() {
     return 0
   fi
 
+  if [ "$INSTALL_SCOPE" = "system" ] && freebsd_rc_available; then
+    echo "freebsd-rc"
+    return 0
+  fi
+
   if [ "$INSTALL_SCOPE" = "system" ] && systemd_available; then
     echo "systemd"
     return 0
@@ -2264,7 +2316,7 @@ clashctl_source() {
 }
 
 service_unit_name() {
-  echo "clash-for-linux.service"
+  echo "clash-freebsd.service"
 }
 
 runtime_backend() {
@@ -2278,6 +2330,11 @@ runtime_backend() {
   backend="$(read_runtime_value "RUNTIME_BACKEND" 2>/dev/null || true)"
   if [ -n "${backend:-}" ]; then
     echo "$backend"
+    return 0
+  fi
+
+  if [ "$INSTALL_SCOPE" = "system" ] && freebsd_rc_available; then
+    echo "freebsd-rc"
     return 0
   fi
 
@@ -2296,7 +2353,7 @@ runtime_backend() {
 
 shell_profile_file() {
   if [ "$INSTALL_SCOPE" = "system" ]; then
-    echo "/etc/profile.d/clash-for-linux.sh"
+    echo "/etc/profile.d/clash-freebsd.sh"
     return 0
   fi
 
@@ -2311,13 +2368,13 @@ completion_dir() {
   if [ "$INSTALL_SCOPE" = "system" ]; then
     echo "/etc/profile.d"
   else
-    echo "$HOME/.config/clash-for-linux"
+    echo "$HOME/.config/clash-freebsd"
   fi
 }
 
 bash_completion_entry_file() {
   if [ "$INSTALL_SCOPE" = "system" ]; then
-    echo "$(completion_dir)/clash-for-linux-completion.bash"
+    echo "$(completion_dir)/clash-freebsd-completion.bash"
   else
     echo "$(completion_dir)/completion.bash"
   fi
@@ -2325,7 +2382,7 @@ bash_completion_entry_file() {
 
 zsh_completion_entry_file() {
   if [ "$INSTALL_SCOPE" = "system" ]; then
-    echo "$(completion_dir)/clash-for-linux-completion.zsh"
+    echo "$(completion_dir)/clash-freebsd-completion.zsh"
   else
     echo "$(completion_dir)/completion.zsh"
   fi
@@ -2356,7 +2413,7 @@ ensure_command_install_dir_in_shell_path() {
     if ! grep -Fq "$install_dir" "$shell_rc" 2>/dev/null; then
       {
         echo
-        echo "# clash-for-linux PATH"
+        echo "# clash-freebsd PATH"
         echo "export PATH=\"$install_dir:\$PATH\""
       } >> "$shell_rc"
     fi
@@ -2449,7 +2506,7 @@ install_shell_alias_entry() {
 
 cat > "$profile_file" <<EOF
 #!/usr/bin/env bash
-# clash-for-linux shell entry
+# clash-freebsd shell entry
 export PATH="$(command_install_dir):\$PATH"
 
 if [ -n "\${BASH_VERSION:-}" ] && [ -z "\${CLASH_FOR_LINUX_SHELL_LOADED:-}" ]; then
@@ -2528,7 +2585,7 @@ install_runtime_ready() {
 
 shell_rc_files() {
   if [ "$INSTALL_SCOPE" = "system" ]; then
-    echo "/etc/profile.d/clash-for-linux.sh"
+    echo "/etc/profile.d/clash-freebsd.sh"
     return 0
   fi
 
@@ -2555,9 +2612,9 @@ command_install_dir() {
 
 profile_entry_file() {
   if [ "$INSTALL_SCOPE" = "system" ]; then
-    echo "/etc/profile.d/clash-for-linux.sh"
+    echo "/etc/profile.d/clash-freebsd.sh"
   else
-    echo "$HOME/.config/clash-for-linux/profile.sh"
+    echo "$HOME/.config/clash-freebsd/profile.sh"
   fi
 }
 
@@ -2566,8 +2623,8 @@ install_rc_source_block() {
   local source_target="$2"
   local marker_begin marker_end
 
-  marker_begin="# >>> clash-for-linux >>>"
-  marker_end="# <<< clash-for-linux <<<"
+  marker_begin="# >>> clash-freebsd >>>"
+  marker_end="# <<< clash-freebsd <<<"
 
   mkdir -p "$(dirname "$profile_file")"
   touch "$profile_file"
@@ -2589,8 +2646,8 @@ remove_rc_source_block() {
   local profile_file="$1"
   local marker_begin marker_end
 
-  marker_begin="# >>> clash-for-linux >>>"
-  marker_end="# <<< clash-for-linux <<<"
+  marker_begin="# >>> clash-freebsd >>>"
+  marker_end="# <<< clash-freebsd <<<"
 
   [ -f "$profile_file" ] || return 0
 
@@ -2607,12 +2664,12 @@ install_user_local_bin_path_entry() {
   [ "$INSTALL_SCOPE" = "user" ] || return 0
 
   path_dir="$(user_local_bin_dir)"
-  marker_begin="# >>> clash-for-linux-path >>>"
-  marker_end="# <<< clash-for-linux-path <<<"
+  marker_begin="# >>> clash-freebsd-path >>>"
+  marker_end="# <<< clash-freebsd-path <<<"
 
   while IFS= read -r profile_file; do
     [ -n "${profile_file:-}" ] || continue
-    [ "$profile_file" = "/etc/profile.d/clash-for-linux.sh" ] && continue
+    [ "$profile_file" = "/etc/profile.d/clash-freebsd.sh" ] && continue
 
     mkdir -p "$(dirname "$profile_file")"
     touch "$profile_file"
@@ -2639,8 +2696,8 @@ remove_user_local_bin_path_entry() {
 
   [ "$INSTALL_SCOPE" = "user" ] || return 0
 
-  marker_begin="# >>> clash-for-linux-path >>>"
-  marker_end="# <<< clash-for-linux-path <<<"
+  marker_begin="# >>> clash-freebsd-path >>>"
+  marker_end="# <<< clash-freebsd-path <<<"
 
   while IFS= read -r profile_file; do
     [ -n "${profile_file:-}" ] || continue

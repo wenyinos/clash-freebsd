@@ -6,7 +6,7 @@ install_systemd_entry() {
 
   cat > "$unit_file" <<EOF
 [Unit]
-Description=clash-for-linux
+Description=clash-freebsd
 After=network-online.target
 Wants=network-online.target
 

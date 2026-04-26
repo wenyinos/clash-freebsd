@@ -27,6 +27,8 @@ source "$PROJECT_DIR/scripts/core/common.sh"
 source "$PROJECT_DIR/scripts/core/runtime.sh"
 # shellcheck source=scripts/core/config.sh
 source "$PROJECT_DIR/scripts/core/config.sh"
+# shellcheck source=scripts/init/freebsd.sh
+source "$PROJECT_DIR/scripts/init/freebsd.sh"
 # shellcheck source=scripts/init/systemd.sh
 source "$PROJECT_DIR/scripts/init/systemd.sh"
 # shellcheck source=scripts/init/systemd-user.sh

@@ -102,7 +102,7 @@ _clash_alias_export_system_proxy() {
 
   proxy_file="${SYSTEM_PROXY_ENV_FILE:-/etc/environment}"
   [ -f "$proxy_file" ] || return 1
-  grep -Fq "# >>> clash-for-linux system proxy >>>" "$proxy_file" 2>/dev/null || return 1
+  grep -Fq "# >>> clash-freebsd system proxy >>>" "$proxy_file" 2>/dev/null || return 1
 
   http_url="$(sed -nE 's/^http_proxy="?([^"\r\n]+)"?$/\1/p' "$proxy_file" | tail -n 1)"
   https_url="$(sed -nE 's/^https_proxy="?([^"\r\n]+)"?$/\1/p' "$proxy_file" | tail -n 1)"

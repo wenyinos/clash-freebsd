@@ -16,3 +16,4 @@ resources/dashboard/dist/
 
 # Local test scripts
 test.sh
+.codex

@@ -6,20 +6,40 @@ source "${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scri
 source "${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scripts/core/config.sh"
 
 resolve_yq() {
-  local arch version file url tmp_dir tmp_file
+  local arch os version file extracted_bin url tmp_dir tmp_file
 
   arch="$(get_arch)"
+  os="$(get_os)"
   version="${YQ_VERSION:-$DEFAULT_YQ_VERSION}"
 
   if [ -x "$(yq_bin)" ]; then
     return 0
   fi
 
-  case "$arch" in
-    amd64) file="yq_linux_amd64.tar.gz" ;;
-    arm64) file="yq_linux_arm64.tar.gz" ;;
-    armv7) file="yq_linux_arm.tar.gz" ;;
-    *) die "暂不支持的 yq 架构：$arch" ;;
+  case "$os:$arch" in
+    linux:amd64)
+      file="yq_linux_amd64.tar.gz"
+      extracted_bin="yq_linux_amd64"
+      ;;
+    linux:arm64)
+      file="yq_linux_arm64.tar.gz"
+      extracted_bin="yq_linux_arm64"
+      ;;
+    linux:armv7)
+      file="yq_linux_arm.tar.gz"
+      extracted_bin="yq_linux_arm"
+      ;;
+    freebsd:amd64)
+      file="yq_freebsd_amd64.tar.gz"
+      extracted_bin="yq_freebsd_amd64"
+      ;;
+    freebsd:arm64)
+      file="yq_freebsd_arm64.tar.gz"
+      extracted_bin="yq_freebsd_arm64"
+      ;;
+    *)
+      die "暂不支持的 yq 目标：${os}/${arch}"
+      ;;
   esac
 
   url="https://github.com/mikefarah/yq/releases/download/${version}/${file}"
@@ -31,10 +51,8 @@ resolve_yq() {
   fi
   tar -xzf "$tmp_file" -C "$tmp_dir"
 
-  if [ -f "$tmp_dir/yq_linux_${arch}" ]; then
-    install -m 0755 "$tmp_dir/yq_linux_${arch}" "$(yq_bin)"
-  elif [ -f "$tmp_dir/yq_linux_arm" ]; then
-    install -m 0755 "$tmp_dir/yq_linux_arm" "$(yq_bin)"
+  if [ -f "$tmp_dir/$extracted_bin" ]; then
+    install -m 0755 "$tmp_dir/$extracted_bin" "$(yq_bin)"
   elif [ -f "$tmp_dir/yq" ]; then
     install -m 0755 "$tmp_dir/yq" "$(yq_bin)"
   else
@@ -46,9 +64,11 @@ resolve_yq() {
 }
 
 resolve_mihomo() {
-  local arch version file url tmp_file url_base custom_url
+  local arch os version file url tmp_file url_base custom_url downloaded
+  local candidates
 
   arch="$(get_arch)"
+  os="$(get_os)"
   version="${MIHOMO_VERSION:-$DEFAULT_MIHOMO_VERSION}"
   url_base="${MIHOMO_DOWNLOAD_BASE:-https://github.com/MetaCubeX/mihomo/releases/download}"
   custom_url="${MIHOMO_DOWNLOAD_URL:-}"
@@ -57,36 +77,77 @@ resolve_mihomo() {
     return 0
   fi
 
-  case "$arch" in
-    amd64) file="mihomo-linux-amd64-compatible-${version}.gz" ;;
-    arm64) file="mihomo-linux-arm64-${version}.gz" ;;
-    armv7) file="mihomo-linux-armv7-${version}.gz" ;;
-    *) die "暂不支持的 Mihomo 架构：$arch" ;;
+  case "$os:$arch" in
+    linux:amd64)
+      candidates="mihomo-linux-amd64-compatible-${version}.gz"
+      ;;
+    linux:arm64)
+      candidates="mihomo-linux-arm64-${version}.gz"
+      ;;
+    linux:armv7)
+      candidates="mihomo-linux-armv7-${version}.gz"
+      ;;
+    freebsd:amd64)
+      candidates="
+mihomo-freebsd-amd64-compatible-${version}.gz
+mihomo-freebsd-amd64-v1-${version}.gz
+mihomo-freebsd-amd64-${version}.gz
+"
+      ;;
+    freebsd:arm64)
+      candidates="
+mihomo-freebsd-arm64-${version}.gz
+mihomo-freebsd-arm64-v8-${version}.gz
+"
+      ;;
+    *)
+      die "暂不支持的 Mihomo 目标：${os}/${arch}"
+      ;;
   esac
 
   if [ -n "${custom_url:-}" ]; then
     url="$custom_url"
+    tmp_file="$(mktemp)"
+    if ! copy_bundled_asset "mihomo" "$version" "${url##*/}" "$tmp_file" "mihomo"; then
+      download_file "$url" "$tmp_file" "mihomo（可在 .env 中设置 MIHOMO_DOWNLOAD_BASE / MIHOMO_DOWNLOAD_URL）"
+    fi
   else
-    url="${url_base%/}/${version}/${file}"
-  fi
-  tmp_file="$(mktemp)"
+    tmp_file="$(mktemp)"
+    downloaded="false"
+    for file in $candidates; do
+      url="${url_base%/}/${version}/${file}"
+      if copy_bundled_asset "mihomo" "$version" "$file" "$tmp_file" "mihomo" \
+        || download_file "$url" "$tmp_file" "mihomo"; then
+        downloaded="true"
+        break
+      fi
+    done
 
-  if ! copy_bundled_asset "mihomo" "$version" "$file" "$tmp_file" "mihomo"; then
-    download_file "$url" "$tmp_file" "mihomo（可在 .env 中设置 MIHOMO_DOWNLOAD_BASE / MIHOMO_DOWNLOAD_URL）"
+    [ "$downloaded" = "true" ] || {
+      rm -f "$tmp_file"
+      die "Mihomo 下载失败：未找到 ${os}/${arch} 可用资产（版本：$version）"
+    }
   fi
+
   gzip -dc "$tmp_file" > "$(mihomo_bin)"
   chmod +x "$(mihomo_bin)"
   rm -f "$tmp_file"
 }
 
 resolve_clash() {
-  local arch version version_no_v url_base tmp_file url downloaded="false"
+  local arch os version version_no_v url_base tmp_file url downloaded="false"
   local candidates file
 
   arch="$(get_arch)"
+  os="$(get_os)"
   version="${CLASH_VERSION:-$DEFAULT_CLASH_VERSION}"
   version_no_v="${version#v}"
   url_base="${CLASH_DOWNLOAD_BASE:-https://github.com/WindSpiritSR/clash/releases/download}"
+
+  if [ "$os" = "freebsd" ]; then
+    die_state "FreeBSD 当前仅支持 mihomo 内核，clash 内核自动安装不可用" \
+              "请设置 KERNEL_TYPE=mihomo 后重新执行（例如：export KERNEL_TYPE=mihomo）"
+  fi
 
   if [ -x "$(clash_bin)" ] \
     && [ "$(read_runtime_value "KERNEL_TYPE_INSTALLED" 2>/dev/null || true)" = "clash" ] \

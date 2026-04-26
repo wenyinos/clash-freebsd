@@ -9,7 +9,7 @@ install_systemd_user_entry() {
 
   cat > "$unit_file" <<EOF
 [Unit]
-Description=clash-for-linux (user)
+Description=clash-freebsd (user)
 After=default.target
 
 [Service]

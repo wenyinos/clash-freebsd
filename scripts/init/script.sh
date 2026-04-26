@@ -41,6 +41,11 @@ install_runtime_entry() {
     return 0
   fi
 
+  if [ "$INSTALL_SCOPE" = "system" ] && freebsd_rc_available; then
+    install_freebsd_entry
+    return 0
+  fi
+
   if [ "$INSTALL_SCOPE" = "system" ] && systemd_available; then
     install_systemd_entry
     return 0
@@ -59,6 +64,9 @@ remove_runtime_entry() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      remove_freebsd_entry
+      ;;
     systemd)
       remove_systemd_entry
       ;;
@@ -80,6 +88,9 @@ service_start() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_start
+      ;;
     systemd)
       systemd_service_start
       ;;
@@ -100,6 +111,9 @@ service_stop() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_stop
+      ;;
     systemd)
       systemd_service_stop
       ;;
@@ -120,6 +134,9 @@ service_restart() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_restart
+      ;;
     systemd)
       systemd_service_restart
       ;;
@@ -137,7 +154,7 @@ service_restart() {
 
 service_autostart_supported() {
   case "$(runtime_backend)" in
-    systemd|systemd-user)
+    freebsd-rc|systemd|systemd-user)
       return 0
       ;;
     *)
@@ -151,6 +168,9 @@ service_autostart_enable() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_autostart_enable
+      ;;
     systemd)
       systemd_service_autostart_enable
       ;;
@@ -173,6 +193,9 @@ service_autostart_disable() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_autostart_disable
+      ;;
     systemd)
       systemd_service_autostart_disable
       ;;
@@ -195,6 +218,9 @@ service_autostart_status() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_autostart_status
+      ;;
     systemd)
       systemd_service_autostart_status
       ;;
@@ -215,6 +241,9 @@ service_is_running() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      service "$(freebsd_service_name)" onestatus >/dev/null 2>&1
+      ;;
     systemd)
       systemctl is-active --quiet "$(service_unit_name)"
       ;;
@@ -240,6 +269,9 @@ service_status_text() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_status_text
+      ;;
     systemd)
       systemd_service_status_text
       ;;
@@ -260,6 +292,9 @@ service_logs() {
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      freebsd_service_logs
+      ;;
     systemd)
       systemd_service_logs
       ;;

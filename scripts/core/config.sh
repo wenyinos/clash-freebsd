@@ -3030,7 +3030,7 @@ start_subconverter() {
     fi
     {
       echo
-      echo "===== clash-for-linux subconverter restart ====="
+      echo "===== clash-freebsd subconverter restart ====="
       echo "time: $(now_datetime)"
       echo "reason: old process exists but port is not listening"
       echo "pid_file: $pid_file"
@@ -3065,7 +3065,7 @@ start_subconverter() {
   fi
   {
     echo
-    echo "===== clash-for-linux subconverter start failed ====="
+    echo "===== clash-freebsd subconverter start failed ====="
     echo "time: $(now_datetime)"
     echo "command: cd \"$home\" && \"$bin\""
     echo "port: $(subconverter_port)"
@@ -3438,7 +3438,7 @@ convert_subscription_via_subconverter() {
 
   {
     echo
-    echo "===== clash-for-linux subconverter conversion ====="
+    echo "===== clash-freebsd subconverter conversion ====="
     echo "time: $(now_datetime)"
     echo "reason: $convert_reason"
     echo "request: GET $api"

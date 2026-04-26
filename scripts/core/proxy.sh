@@ -36,11 +36,11 @@ system_proxy_env_file() {
 }
 
 system_proxy_block_begin() {
-  echo "# >>> clash-for-linux system proxy >>>"
+  echo "# >>> clash-freebsd system proxy >>>"
 }
 
 system_proxy_block_end() {
-  echo "# <<< clash-for-linux system proxy <<<"
+  echo "# <<< clash-freebsd system proxy <<<"
 }
 
 system_proxy_supported() {

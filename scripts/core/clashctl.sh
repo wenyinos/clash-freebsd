@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+if command -v realpath >/dev/null 2>&1; then
+  SCRIPT_PATH="$(realpath "${BASH_SOURCE[0]}")"
+elif readlink -f "${BASH_SOURCE[0]}" >/dev/null 2>&1; then
+  SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+else
+  SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+fi
 PROJECT_DIR="$(cd "$(dirname "$SCRIPT_PATH")/../.." && pwd)"
 
 source "$PROJECT_DIR/scripts/core/common.sh"
@@ -10,6 +16,7 @@ source "$PROJECT_DIR/scripts/core/config.sh"
 source "$PROJECT_DIR/scripts/core/completion.sh"
 source "$PROJECT_DIR/scripts/core/proxy.sh"
 source "$PROJECT_DIR/scripts/core/update.sh"
+source "$PROJECT_DIR/scripts/init/freebsd.sh"
 source "$PROJECT_DIR/scripts/init/systemd.sh"
 source "$PROJECT_DIR/scripts/init/systemd-user.sh"
 source "$PROJECT_DIR/scripts/init/script.sh"
@@ -2882,16 +2889,29 @@ ui_controller_port() {
 }
 
 ui_lan_ip() {
-  ip route get 1.1.1.1 2>/dev/null | awk '
-    {
-      for (i = 1; i <= NF; i++) {
-        if ($i == "src") {
-          print $(i+1)
-          exit
+  local iface
+
+  if has_ip_command 2>/dev/null; then
+    ip route get 1.1.1.1 2>/dev/null | awk '
+      {
+        for (i = 1; i <= NF; i++) {
+          if ($i == "src") {
+            print $(i+1)
+            exit
+          }
         }
       }
-    }
-  '
+    '
+    return 0
+  fi
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] \
+    && command -v route >/dev/null 2>&1 \
+    && command -v ifconfig >/dev/null 2>&1; then
+    iface="$(route -n get default 2>/dev/null | awk '/interface:/{print $2; exit}')"
+    [ -n "${iface:-}" ] || return 1
+    ifconfig "$iface" 2>/dev/null | awk '/inet / && $2 != "127.0.0.1" {print $2; exit}'
+  fi
 }
 
 ui_public_ip() {
@@ -3155,15 +3175,15 @@ doctor_container_tun() {
   esac
 
   if tun_device_exists; then
-    doctor_ok "/dev/net/tun 存在"
+    doctor_ok "$(tun_device_path_hint) 存在"
   else
-    doctor_warn "/dev/net/tun 不存在"
+    doctor_warn "$(tun_device_path_hint) 不存在"
   fi
 
   if tun_device_readable; then
-    doctor_ok "/dev/net/tun 可读写"
+    doctor_ok "$(tun_device_path_hint) 可读写"
   else
-    doctor_warn "/dev/net/tun 不可直接读写"
+    doctor_warn "$(tun_device_path_hint) 不可直接读写"
   fi
 
   case "$(install_env_tun_safe 2>/dev/null || true)" in
@@ -3180,6 +3200,8 @@ doctor_container_tun() {
 
   if has_ip_command; then
     doctor_ok "ip 命令可用"
+  elif [ "$(get_os 2>/dev/null || true)" = "freebsd" ] && command -v route >/dev/null 2>&1; then
+    doctor_ok "route 命令可用（FreeBSD）"
   else
     doctor_warn "缺少 ip 命令，Tun/路由能力受限"
   fi
@@ -4953,16 +4975,16 @@ doctor_tun_checks() {
   echo "  💻 是否容器：$(tun_doctor_container_evidence_text "$env_type")"
 
   if tun_device_exists; then
-    echo "  🐱 /dev/net/tun：存在"
+    echo "  🐱 $(tun_device_path_hint)：存在"
   else
-    echo "  ❗ /dev/net/tun：不存在"
+    echo "  ❗ $(tun_device_path_hint)：不存在"
   fi
 
   if tun_device_exists; then
     if tun_device_readable; then
-      echo "  🐱 /dev/net/tun：可读写"
+      echo "  🐱 $(tun_device_path_hint)：可读写"
     else
-      echo "  🚨 /dev/net/tun：存在但不可正常读写"
+      echo "  🚨 $(tun_device_path_hint)：存在但不可正常读写"
     fi
   fi
 
@@ -5099,7 +5121,7 @@ tun_runtime_pid() {
   local backend="${1:-unknown}"
   local pid_file pid unit
 
-  unit="$(service_unit_name 2>/dev/null || echo clash-for-linux.service)"
+  unit="$(service_unit_name 2>/dev/null || echo clash-freebsd.service)"
   case "$backend" in
     systemd)
       if command -v systemctl >/dev/null 2>&1; then
@@ -5200,17 +5222,40 @@ tun_log_has_tun_traffic_evidence() {
 }
 
 tun_policy_rule_line() {
-  has_ip_command 2>/dev/null || return 1
-  ip rule show 2>/dev/null \
-    | grep -E '(lookup 2022|iif Meta|not from all iif lo lookup 2022)' \
-    | head -n 1
+  if has_ip_command 2>/dev/null; then
+    ip rule show 2>/dev/null \
+      | grep -E '(lookup 2022|iif Meta|not from all iif lo lookup 2022)' \
+      | head -n 1
+    return 0
+  fi
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] && command -v route >/dev/null 2>&1; then
+    route -n get default 2>/dev/null \
+      | grep -E 'interface:[[:space:]]*(Meta|tun|utun|mihomo|clash)' \
+      | head -n 1
+    return 0
+  fi
+
+  return 1
 }
 
 tun_policy_route_line() {
-  has_ip_command 2>/dev/null || return 1
-  ip route show table all 2>/dev/null \
-    | grep -E '(^|[[:space:]])default .* dev (Meta|tun|utun|mihomo|clash)([[:space:]].*)? table 2022|table 2022 .*default .* dev (Meta|tun|utun|mihomo|clash)' \
-    | head -n 1
+  if has_ip_command 2>/dev/null; then
+    ip route show table all 2>/dev/null \
+      | grep -E '(^|[[:space:]])default .* dev (Meta|tun|utun|mihomo|clash)([[:space:]].*)? table 2022|table 2022 .*default .* dev (Meta|tun|utun|mihomo|clash)' \
+      | head -n 1
+    return 0
+  fi
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] && command -v netstat >/dev/null 2>&1; then
+    netstat -rn -f inet 2>/dev/null \
+      | awk '$1=="default"{print}' \
+      | grep -E '(Meta|tun|utun|mihomo|clash)' \
+      | head -n 1
+    return 0
+  fi
+
+  return 1
 }
 
 tun_has_policy_routing_evidence() {
@@ -5220,6 +5265,12 @@ tun_has_policy_routing_evidence() {
 }
 
 tun_doctor_ip_rule_evidence() {
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] && command -v route >/dev/null 2>&1; then
+    echo "  📜 route -n get default："
+    route -n get default 2>/dev/null | sed 's/^/    /' || echo "    读取失败"
+    return 0
+  fi
+
   if ! has_ip_command 2>/dev/null; then
     echo "  🚨 ip rule：缺少 ip 命令，无法读取"
     return 0
@@ -5230,6 +5281,12 @@ tun_doctor_ip_rule_evidence() {
 }
 
 tun_doctor_route_table_evidence() {
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] && command -v netstat >/dev/null 2>&1; then
+    echo "  📜 netstat -rn -f inet："
+    netstat -rn -f inet 2>/dev/null | sed -n '1,80p' | sed 's/^/    /' || echo "    读取失败"
+    return 0
+  fi
+
   if ! has_ip_command 2>/dev/null; then
     echo "  🚨 ip route table all：缺少 ip 命令，无法读取"
     return 0
@@ -5281,7 +5338,7 @@ tun_unit_capability_text() {
   local backend="${1:-unknown}"
   local unit unit_file content
 
-  unit="$(service_unit_name 2>/dev/null || echo clash-for-linux.service)"
+  unit="$(service_unit_name 2>/dev/null || echo clash-freebsd.service)"
   case "$backend" in
     systemd)
       if command -v systemctl >/dev/null 2>&1; then
@@ -5417,7 +5474,7 @@ tun_doctor_primary_reason() {
     return 0
   fi
 
-  if ! has_ip_command 2>/dev/null; then
+  if ! has_ip_command 2>/dev/null && [ "$(get_os 2>/dev/null || true)" != "freebsd" ]; then
     echo "missing-ip-command"
     return 0
   fi
@@ -5467,13 +5524,17 @@ tun_doctor_conclusion_line() {
       echo "❗ Tun 未生效：当前能力检测未通过（CAP_NET_ADMIN）"
       ;;
     missing-tun-device)
-      echo "❗ Tun 未生效：缺少 /dev/net/tun"
+      echo "❗ Tun 未生效：缺少 $(tun_device_path_hint)"
       ;;
     tun-device-not-readable)
-      echo "❗ Tun 未生效：/dev/net/tun 不可读写"
+      echo "❗ Tun 未生效：$(tun_device_path_hint) 不可读写"
       ;;
     missing-ip-command)
-      echo "❗ Tun 未生效：缺少 ip 命令"
+      if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+        echo "❗ Tun 未生效：缺少可用路由诊断命令（route/netstat）"
+      else
+        echo "❗ Tun 未生效：缺少 ip 命令"
+      fi
       ;;
     runtime-not-running)
       echo "❗ Tun 未生效：代理内核未运行"
@@ -5515,7 +5576,7 @@ tun_doctor_action_lines() {
 
   reason="${1:-traffic-check-failed}"
   backend="$(runtime_backend 2>/dev/null || echo unknown)"
-  unit="$(service_unit_name 2>/dev/null || echo clash-for-linux.service)"
+  unit="$(service_unit_name 2>/dev/null || echo clash-freebsd.service)"
 
   case "$reason" in
     missing-cap-net-admin)
@@ -5544,19 +5605,22 @@ tun_doctor_action_lines() {
       if [ "$(container_env_type 2>/dev/null || echo unknown)" != "host" ]; then
         tun_container_runtime_hint_lines || true
       else
-        echo "👉 请先挂载或启用 /dev/net/tun"
+        echo "👉 请先挂载或启用 $(tun_device_path_hint)"
       fi
       ;;
     tun-device-not-readable)
-      echo "👉 请修复 /dev/net/tun 权限，确保当前运行用户可读写"
+      echo "👉 请修复 $(tun_device_path_hint) 权限，确保当前运行用户可读写"
       ;;
     missing-ip-command)
       if [ "$(container_env_type 2>/dev/null || echo unknown)" != "host" ]; then
         tun_container_runtime_hint_lines || true
       else
-        case "$(install_env_os_variant 2>/dev/null || true)" in
+        case "$(install_env_os 2>/dev/null || true)" in
           openwrt)
             echo "👉 当前环境缺少 ip 命令；OpenWrt 可安装：opkg update && opkg install ip-full"
+            ;;
+          freebsd)
+            echo "👉 FreeBSD 请确认 route/netstat 可用，并检查默认路由是否已接管到 tun 接口"
             ;;
           *)
             echo "👉 Debian/Ubuntu 可安装：apt update && apt install -y iproute2"
@@ -5683,7 +5747,11 @@ tun_recommendation_lines() {
         ;;
       *)
         echo "1. 当前环境不满足 Tun 基础条件"
-        echo "2. 优先检查：/dev/net/tun、CAP_NET_ADMIN、ip 命令"
+        if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+          echo "2. 优先检查：$(tun_device_path_hint)、root 权限、默认路由接管"
+        else
+          echo "2. 优先检查：$(tun_device_path_hint)、CAP_NET_ADMIN、ip 命令"
+        fi
         echo "3. 条件满足后再执行：clashctl tun on"
         ;;
     esac
@@ -5736,14 +5804,14 @@ tun_problem_lines() {
   route_dev="$(default_route_dev 2>/dev/null || true)"
 
   if ! tun_device_exists 2>/dev/null; then
-    echo "• /dev/net/tun 不存在"
+    echo "• $(tun_device_path_hint) 不存在"
   fi
 
   if tun_device_exists 2>/dev/null && ! tun_device_readable 2>/dev/null; then
-    echo "• /dev/net/tun 存在但不可正常读写"
+    echo "• $(tun_device_path_hint) 存在但不可正常读写"
   fi
 
-  if ! has_ip_command 2>/dev/null; then
+  if ! has_ip_command 2>/dev/null && [ "$(get_os 2>/dev/null || true)" != "freebsd" ]; then
     echo "• 缺少 ip 命令，无法进行完整路由校验"
   fi
 
