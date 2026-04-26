@@ -105,22 +105,23 @@ clashctl status
 系统安装默认使用 `freebsd-rc` 后端，服务名：`clash_freebsd`。
 
 ```sh
-service clash_freebsd status
-service clash_freebsd start
-service clash_freebsd stop
-service clash_freebsd restart
+sudo service clash_freebsd status
+sudo service clash_freebsd start
+sudo service clash_freebsd stop
+sudo service clash_freebsd restart
 ```
 
 管理内核服务开机自启：
 
 ```sh
-clashctl autostart on
-clashctl autostart status
-clashctl autostart off
+sudo clashctl autostart on
+sudo clashctl autostart status
+sudo clashctl autostart off
 ```
 
 说明：
 - `clashctl autostart on` 只影响 rc.d 服务是否随系统启动。
+- `service` 与 `autostart` 命令需要 root 权限（请使用 root 或 `sudo`）。
 - FreeBSD 自启配置文件：`/etc/rc.conf.d/clash_freebsd`。
 
 ## 4. Tun 与路由诊断（FreeBSD）
@@ -128,13 +129,15 @@ clashctl autostart off
 Tun 设备通常为 `/dev/tun*`。
 
 ```sh
-clashctl tun on
+sudo clashctl tun on
+sudo clashctl tun off
 clashctl tun doctor
 route -n get default
 netstat -rn -f inet
 ```
 
 Tun 未生效时优先检查：
+- `tun on/off` 需要 root 权限（请使用 root 或 `sudo`）。
 - `ls -l /dev/tun*`
 - 当前用户权限（建议 root）
 - 默认路由是否已接管到 tun 接口
