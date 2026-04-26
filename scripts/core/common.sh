@@ -1428,14 +1428,28 @@ runtime_meta_file() {
   echo "$RUNTIME_DIR/install.env"
 }
 
+ensure_kv_file_writable_or_die() {
+  local file="$1"
+  local dir
+
+  dir="$(dirname "$file")"
+  mkdir -p "$dir" 2>/dev/null || die_state "Permission denied: 无法写入目录 $dir" "请通过 root 用户或 sudo 重新运行"
+
+  if [ -f "$file" ]; then
+    [ -w "$file" ] || die_state "Permission denied: $file" "请通过 root 用户或 sudo 重新运行"
+    return 0
+  fi
+
+  touch "$file" 2>/dev/null || die_state "Permission denied: 无法创建文件 $file" "请通过 root 用户或 sudo 重新运行"
+}
+
 write_runtime_value() {
   local key="$1"
   local value="$2"
   local file
   file="$(runtime_meta_file)"
 
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
+  ensure_kv_file_writable_or_die "$file"
 
   if grep -qE "^[[:space:]]*${key}=" "$file"; then
     awk -v k="$key" -v v="$value" '
@@ -1444,7 +1458,7 @@ write_runtime_value() {
         next
       }
       { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
   else
     printf '%s="%s"\n' "$key" "$value" >> "$file"
   fi
@@ -1508,8 +1522,7 @@ write_tun_value() {
   local file
 
   file="$(tun_state_file)"
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
+  ensure_kv_file_writable_or_die "$file"
 
   if grep -qE "^[[:space:]]*${key}=" "$file"; then
     awk -v k="$key" -v v="$value" '
@@ -1518,7 +1531,7 @@ write_tun_value() {
         next
       }
       { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
   else
     printf '%s="%s"\n' "$key" "$value" >> "$file"
   fi
@@ -1540,8 +1553,7 @@ write_runtime_event_value() {
   local file
 
   file="$(runtime_event_file)"
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
+  ensure_kv_file_writable_or_die "$file"
 
   if grep -qE "^[[:space:]]*${key}=" "$file"; then
     awk -v k="$key" -v v="$value" '
@@ -1550,7 +1562,7 @@ write_runtime_event_value() {
         next
       }
       { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
   else
     printf '%s="%s"\n' "$key" "$value" >> "$file"
   fi
@@ -1602,8 +1614,7 @@ write_build_value() {
   local file
   file="$(build_meta_file)"
 
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
+  ensure_kv_file_writable_or_die "$file"
 
   if grep -qE "^[[:space:]]*${key}=" "$file"; then
     awk -v k="$key" -v v="$value" '
@@ -1612,7 +1623,7 @@ write_build_value() {
         next
       }
       { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
   else
     printf '%s="%s"\n' "$key" "$value" >> "$file"
   fi
