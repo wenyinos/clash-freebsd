@@ -295,7 +295,7 @@ _clash_freebsd_complete_top_level() {
   _clash_freebsd_add_matches "$cur" \
     add use ls health select on off status status-next \
     autostart log logs doctor ui secret tun dev config mixin \
-    relay profile sub proxy upgrade update completion help \
+    relay profile sub proxy upgrade completion help \
     -h --help
 }
 
@@ -363,7 +363,6 @@ _clash_freebsd_complete_command() {
     sub) _clash_freebsd_complete_sub "$cur" "$rel_index" "$arg1" ;;
     tun) _clash_freebsd_complete_tun "$cur" "$rel_index" ;;
     upgrade) _clash_freebsd_complete_upgrade "$cur" ;;
-    update) _clash_freebsd_complete_update "$cur" ;;
     dev) _clash_freebsd_complete_dev "$cur" "$rel_index" ;;
     completion) _clash_freebsd_complete_completion "$cur" "$rel_index" ;;
     help) _clash_freebsd_complete_help "$cur" "$rel_index" ;;

@@ -75,7 +75,6 @@ usage_advanced() {
 🚀 Lifecycle:
   autostart on|off|status            🚦 管理 FreeBSD 内核开机自启
   upgrade                        🚀 升级当前或指定内核
-  update                         🔄 更新项目代码
   completion bash|zsh            💡 导出 Shell 补全脚本
   dev reset                      🧪 恢复到安装前状态（保留项目目录和已下载文件）
 
@@ -94,7 +93,6 @@ usage_advanced() {
   clashctl relay list
 
   clashctl tun doctor
-  clashctl update --force
   clashctl dev reset
 
 🚀 Main Path Reminder:
@@ -2853,7 +2851,6 @@ cmd_ui_help_summary() {
   printf '  %-18s %s\n' "clashctl mixin" "🧩 Mixin 配置管理"
   printf '  %-18s %s\n' "clashctl sub" "🧩 订阅高级管理（启用 / 禁用 / 重命名 / 删除）"
   printf '  %-18s %s\n' "clashctl upgrade" "🚀 升级当前或指定内核"
-  printf '  %-18s %s\n' "clashctl update" "🔄 更新项目代码"
   printf '  %-18s %s\n' "clashctl completion" "💡 导出 Bash / Zsh 补全脚本"
   echo "📜 日志"
   printf '  %-18s %s\n' "clashctl doctor" "🩺 诊断面板"
@@ -6762,41 +6759,7 @@ cmd_upgrade() {
 }
 
 cmd_update() {
-  local force_mode="false"
-  local regenerate_mode="false"
-
-  prepare
-
-  while [ $# -gt 0 ]; do
-    case "$1" in
-      --force)
-        force_mode="true"
-        ;;
-      --regenerate)
-        regenerate_mode="true"
-        ;;
-      *)
-        die_usage "update 参数不合法" "clashctl update [--force] [--regenerate]"
-        ;;
-    esac
-    shift
-  done
-
-  warn_if_no_proxy_env
-
-  ui_title "🔄 正在更新项目代码 ..."
-
-  update_project_code "$force_mode" "$regenerate_mode"
-
-  ui_title "🐱 项目代码已更新"
-  ui_kv "🧩" "影响范围" "脚本、CLI、配置处理逻辑可能已变化"
-  if [ "$regenerate_mode" = "true" ]; then
-    ui_kv "🧩" "配置状态" "已重新生成"
-  else
-    ui_kv "🚨" "配置状态" "未自动重新生成"
-  fi
-  ui_next "clashctl status"
-  ui_blank
+  die_state "update 功能已禁用" "如需更新代码，请手动使用 git pull"
 }
 
 cmd_start_direct() {
