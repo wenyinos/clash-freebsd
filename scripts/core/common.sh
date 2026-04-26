@@ -2421,22 +2421,24 @@ ensure_command_install_dir_in_shell_path() {
 }
 
 install_clashctl_entry() {
-  local install_dir target bin_target
+  local install_dir target bin_target bash_path
   install_dir="$(command_install_dir)"
   target="$(clashctl_entry_target)"
   bin_target="$(clashctl_bin_entry_target)"
+  bash_path="$(command -v bash 2>/dev/null || true)"
+  [ -n "${bash_path:-}" ] || bash_path="/usr/local/bin/bash"
 
   mkdir -p "$install_dir"
 
   cat > "$bin_target" <<EOF
-#!/usr/bin/env bash
+#!$bash_path
 set -euo pipefail
-exec bash "$PROJECT_DIR/scripts/core/clashctl.sh" "\$@"
+exec "$bash_path" "$PROJECT_DIR/scripts/core/clashctl.sh" "\$@"
 EOF
   chmod +x "$bin_target"
 
   cat > "$target" <<EOF
-#!/usr/bin/env bash
+#!$bash_path
 set -euo pipefail
 exec "$bin_target" "\$@"
 EOF
