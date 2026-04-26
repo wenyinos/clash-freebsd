@@ -19,7 +19,33 @@ info()     { printf 'ℹ %s\n' "$*"; }
 success()  { printf '✔ %s\n' "$*"; }
 warn()     { printf '⚠ %s\n' "$*" >&2; }
 error()    { printf '✘ %s\n' "$*" >&2; }
-die()      { error "$*"; exit 1; }
+
+permission_denied_requires_root_or_sudo() {
+  local text
+  text="$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')"
+
+  case "$text" in
+    *"permission denied"*|*"operation not permitted"*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+permission_denied_hint_if_needed() {
+  local text="${1:-}"
+  permission_denied_requires_root_or_sudo "$text" || return 0
+  ui_next "检测到权限不足，请通过 root 用户或 sudo 重新运行" >&2
+}
+
+die() {
+  local message="$*"
+  error "$message"
+  permission_denied_hint_if_needed "$message"
+  exit 1
+}
 
 ui_color() {
     local color="$1"
@@ -46,6 +72,7 @@ die_usage() {
   local next_step="${2:-}"
 
   ui_error "$message"
+  permission_denied_hint_if_needed "$message"
   [ -n "${next_step:-}" ] && ui_next "$next_step" >&2
   exit 1
 }
@@ -55,6 +82,7 @@ die_state() {
   local next_step="${2:-}"
 
   ui_error "$message"
+  permission_denied_hint_if_needed "$message"
   [ -n "${next_step:-}" ] && ui_next "$next_step" >&2
   exit 1
 }
@@ -64,6 +92,7 @@ die_missing() {
   local next_step="${2:-}"
 
   ui_error "${thing}不存在或不可用"
+  permission_denied_hint_if_needed "$thing"
   [ -n "${next_step:-}" ] && ui_next "$next_step" >&2
   exit 1
 }
