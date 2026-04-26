@@ -45,6 +45,42 @@ pkg install -y bash curl unzip gtar gzip
 - 当前脚本通过 `bash` 执行。
 - `freebsd-rc` 后端依赖 `service` 与 `/usr/local/etc/rc.d`。
 
+### 1.1 sudo 找不到 clashctl（PATH 差异）
+
+现象：
+
+```text
+sudo: clashctl：找不到命令
+```
+
+原因：`sudo` 默认使用 `secure_path`，通常不包含用户目录（如 `/home/zemin/.local/bin`）。
+
+临时用法（直接可用）：
+
+```sh
+sudo /home/zemin/.local/bin/clashctl autostart on
+sudo /home/zemin/.local/bin/clashctl autostart status
+```
+
+永久修复（推荐）：
+
+```sh
+sudo visudo
+```
+
+找到并修改（或新增）：
+
+```text
+Defaults secure_path="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin:/home/zemin/.local/bin"
+```
+
+保存后即可直接使用：
+
+```sh
+sudo clashctl autostart on
+sudo clashctl autostart status
+```
+
 ## 2. 安装与初始化
 
 ```sh
