@@ -1260,11 +1260,18 @@ box_title_line() {
 }
 
 status_is_running() {
-  local backend pid
+  if declare -F service_is_running >/dev/null 2>&1; then
+    service_is_running
+    return $?
+  fi
 
+  local backend pid
   backend="$(runtime_backend)"
 
   case "$backend" in
+    freebsd-rc)
+      service "$(freebsd_service_name)" onestatus >/dev/null 2>&1
+      ;;
     systemd)
       systemctl is-active --quiet "$(service_unit_name)"
       ;;
