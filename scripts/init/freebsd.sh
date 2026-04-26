@@ -67,22 +67,22 @@ stop_cmd="\${name}_stop"
 restart_cmd="\${name}_restart"
 status_cmd="\${name}_status"
 
-\${name}_start() {
+$(freebsd_service_name)_start() {
   cd "${project_dir}" || exit 1
   "\${clashctl_bin}" start-direct
 }
 
-\${name}_stop() {
+$(freebsd_service_name)_stop() {
   cd "${project_dir}" || exit 1
   "\${clashctl_bin}" stop-direct
 }
 
-\${name}_restart() {
-  \${name}_stop || true
-  \${name}_start
+$(freebsd_service_name)_restart() {
+  $(freebsd_service_name)_stop || true
+  $(freebsd_service_name)_start
 }
 
-\${name}_status() {
+$(freebsd_service_name)_status() {
   if [ -f "\${pidfile}" ]; then
     pid=\$(cat "\${pidfile}" 2>/dev/null || true)
     if [ -n "\${pid}" ] && kill -0 "\${pid}" 2>/dev/null; then
