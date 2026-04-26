@@ -1348,7 +1348,7 @@ write_env_value() {
         next
       }
       { print }
-    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
+    ' "$file" > "${file}.tmp" && command mv -f "${file}.tmp" "$file"
   else
     printf 'export %s="%s"\n' "$key" "$value" >> "$file"
   fi
@@ -1370,7 +1370,7 @@ unset_env_value() {
   awk -v k="$key" '
     $0 ~ "^[[:space:]]*(export[[:space:]]+)?" k "=" { next }
     { print }
-  ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
+  ' "$file" > "${file}.tmp" && command mv -f "${file}.tmp" "$file"
 }
 
 subscription_auto_update_enabled() {

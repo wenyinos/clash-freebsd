@@ -2975,7 +2975,7 @@ clear_subscription() {
     $0 ~ /^[[:space:]]*(export[[:space:]]+)?CLASH_SUBSCRIPTION_URL=/ { next }
     $0 ~ /^[[:space:]]*(export[[:space:]]+)?CLASH_URL=/ { next }
     { print }
-  ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
+  ' "$file" > "${file}.tmp" && command mv -f "${file}.tmp" "$file"
 
   success "订阅地址已清理"
 }
