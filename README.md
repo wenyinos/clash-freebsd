@@ -1,18 +1,22 @@
-# Clash for FreeBSD（部署文档）
+# Clash for FreeBSD (Deployment Guide)
 
-> 本 README 已切换为 **FreeBSD 部署与运维主文档**。  
-> 推荐内核：`mihomo`（`KERNEL_TYPE=mihomo`）。
+> This README serves as the **primary FreeBSD deployment and operations document**.  
+> Recommended kernel: `mihomo` (`KERNEL_TYPE=mihomo`).
 
-## ✨ 核心特性
+Other languages: [🇨🇳 简体中文](README.zh.md)
 
-- 自动识别架构并下载对应运行依赖
-- 多订阅管理与节点切换
-- Tun 模式与路由诊断
-- Mixin 补丁机制
-- `clashctl doctor` 一键诊断
-- FreeBSD `rc.d` 服务托管（`freebsd-rc` 后端）
+---
 
-## ⌨️ 命令一览
+## ✨ Core Features
+
+- Automatic architecture detection and runtime dependency downloading
+- Multi-subscription management and node switching
+- Tun mode and route diagnostics
+- Mixin patch mechanism
+- One-click diagnostics with `clashctl doctor`
+- FreeBSD `rc.d` service management (`freebsd-rc` backend)
+
+## ⌨️ Command Overview
 
 ```text
 clashon / clashoff
@@ -26,84 +30,84 @@ clashctl update|upgrade
 
 ---
 
-## 1. 环境准备
+## 1. Environment Setup
 
-FreeBSD 默认登录 Shell 可能不是 `bash`，执行以下命令前请先切换到 `bash`：
+The default login shell on FreeBSD may not be `bash`. Switch to `bash` before running the commands below:
 
 ```sh
 bash
 ```
 
-建议使用 `root` 或具备 `sudo` 权限账号。
+It is recommended to use the `root` account or a user with `sudo` privileges.
 
 ```sh
 pkg update
 pkg install -y bash curl unzip gtar gzip
 ```
 
-说明：
-- 当前脚本通过 `bash` 执行。
-- `freebsd-rc` 后端依赖 `service` 与 `/usr/local/etc/rc.d`。
+Notes:
+- Scripts are executed via `bash`.
+- The `freebsd-rc` backend depends on `service` and `/usr/local/etc/rc.d`.
 
-### 1.1 sudo 找不到 clashctl（PATH 差异）
+### 1.1 sudo Cannot Find clashctl (PATH Mismatch)
 
-现象：
+Symptom:
 
 ```text
-sudo: clashctl：找不到命令
+sudo: clashctl: command not found
 ```
 
-原因：`sudo` 默认使用 `secure_path`，通常不包含用户目录（如 `/home/zemin/.local/bin`）。
+Cause: `sudo` uses `secure_path` by default, which usually does not include user directories (e.g., `/home/zemin/.local/bin`).
 
-临时用法（直接可用）：
+Temporary workaround (works immediately):
 
 ```sh
 sudo /home/zemin/.local/bin/clashctl autostart on
 sudo /home/zemin/.local/bin/clashctl autostart status
 ```
 
-永久修复（推荐）：
+Permanent fix (recommended):
 
 ```sh
 sudo visudo
 ```
 
-找到并修改（或新增）：
+Locate and modify (or add):
 
 ```text
 Defaults secure_path="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin:/home/zemin/.local/bin"
 ```
 
-保存后即可直接使用：
+After saving, you can use directly:
 
 ```sh
 sudo clashctl autostart on
 sudo clashctl autostart status
 ```
 
-### 1.2 sudo 导致文件属主漂移（.env / runtime）
+### 1.2 sudo Causes File Ownership Drift (.env / runtime)
 
-现象（示例）：
+Symptom (example):
 
 ```text
 touch: /home/zemin/clash-freebsd/runtime/runtime-events.env: Permission denied
 override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
 ```
 
-原因：使用 `sudo clashctl ...` 执行会把 `.env` 或 `runtime/*` 写成 `root` 属主，后续普通用户执行会权限不足。
+Cause: Running `sudo clashctl ...` writes `.env` or `runtime/*` with `root` ownership, causing permission issues for subsequent non-root execution.
 
-建议：
-- 仅对必须 root 的命令使用 `sudo`（如 `service`、`autostart`、`tun on/off`）。
-- 其他命令（如 `clashctl config regen`、`clashctl secret`、`clashctl logs`）优先使用普通用户执行。
+Recommendations:
+- Use `sudo` only for commands that require root (e.g., `service`, `autostart`, `tun on/off`).
+- Prefer non-root execution for other commands (e.g., `clashctl config regen`, `clashctl secret`, `clashctl logs`).
 
-修复属主（一次性）：
+Fix ownership (one-time):
 
 ```sh
 sudo chown zemin:zemin /home/zemin/clash-freebsd/.env
 sudo chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
 ```
 
-## 2. 安装与初始化
+## 2. Installation and Initialization
 
 ```sh
 git clone --branch master --depth 1 https://github.com/wenyinos/clash-freebsd.git
@@ -112,19 +116,19 @@ export KERNEL_TYPE=mihomo
 bash install.sh
 ```
 
-首次配置：
+First-time configuration:
 
 ```sh
-clashctl add <订阅链接> <名称>
+clashctl add <subscription_url> <name>
 clashctl use
 clashctl select
 clashon
 clashctl status
 ```
 
-## 3. FreeBSD 服务管理（rc.d）
+## 3. FreeBSD Service Management (rc.d)
 
-系统安装默认使用 `freebsd-rc` 后端，服务名：`clash_freebsd`。
+The default installation uses the `freebsd-rc` backend. Service name: `clash_freebsd`.
 
 ```sh
 sudo service clash_freebsd status
@@ -133,7 +137,7 @@ sudo service clash_freebsd stop
 sudo service clash_freebsd restart
 ```
 
-管理内核服务开机自启：
+Manage kernel service auto-start:
 
 ```sh
 sudo clashctl autostart on
@@ -141,14 +145,14 @@ sudo clashctl autostart status
 sudo clashctl autostart off
 ```
 
-说明：
-- `clashctl autostart on` 只影响 rc.d 服务是否随系统启动。
-- `service` 与 `autostart` 命令需要 root 权限（请使用 root 或 `sudo`）。
-- FreeBSD 自启配置文件：`/etc/rc.conf.d/clash_freebsd`。
+Notes:
+- `clashctl autostart on` only affects whether the rc.d service starts on system boot.
+- `service` and `autostart` commands require root privileges (use root or `sudo`).
+- FreeBSD auto-start config file: `/etc/rc.conf.d/clash_freebsd`.
 
-## 4. Tun 与路由诊断（FreeBSD）
+## 4. Tun and Route Diagnostics (FreeBSD)
 
-Tun 设备通常为 `/dev/tun*`。
+Tun devices are typically located at `/dev/tun*`.
 
 ```sh
 sudo clashctl tun on
@@ -158,13 +162,13 @@ route -n get default
 netstat -rn -f inet
 ```
 
-Tun 未生效时优先检查：
-- `tun on/off` 需要 root 权限（请使用 root 或 `sudo`）。
+If Tun is not working, check the following first:
+- `tun on/off` requires root privileges (use root or `sudo`).
 - `ls -l /dev/tun*`
-- 当前用户权限（建议 root）
-- 默认路由是否已接管到 tun 接口
+- Current user permissions (root recommended)
+- Whether the default route has been taken over by the tun interface
 
-## 5. 常用排障命令
+## 5. Common Troubleshooting Commands
 
 ```sh
 clashctl doctor
@@ -173,13 +177,13 @@ clashctl logs mihomo
 clashctl config regen
 ```
 
-## 6. 卸载
+## 6. Uninstallation
 
 ```sh
 bash uninstall.sh
 ```
 
-彻底清理运行时数据：
+Thoroughly clean runtime data:
 
 ```sh
 bash uninstall.sh --purge-runtime
@@ -187,20 +191,18 @@ bash uninstall.sh --purge-runtime
 
 ---
 
-## 7. 最小化服务器（无桌面）部署清单
+## 7. Minimal Server (No Desktop) Deployment Checklist
 
-### 7.1 基础检查（Checklist）
+### 7.1 Basic Checks (Checklist)
 
-- [ ] 系统时间正确（NTP 正常）
-- [ ] 可访问 GitHub（或已配置镜像/代理）
-- [ ] 依赖已安装：`bash` `curl` `unzip` `gtar` `gzip`
-- [ ] 以 `root`（或 `sudo`）执行安装
-- [ ] 预留端口：`7890`（mixed）、`9090`（controller）、`1053`（dns 可选）
-- [ ] 已确认内核：`mihomo`
+- [ ] System time is correct (NTP functioning)
+- [ ] GitHub is accessible (or mirror/proxy configured)
+- [ ] Dependencies installed: `bash` `curl` `unzip` `gtar` `gzip`
+- [ ] Installation performed as `root` (or with `sudo`)
+- [ ] Ports reserved: `7890` (mixed), `9090` (controller), `1053` (DNS, optional)
+- [ ] Kernel confirmed: `mihomo`
 
-
-
-### 7.2 PF 最小放行示例（可选）
+### 7.2 PF Minimal Allow Example (Optional)
 
 ```pf
 pass in inet proto tcp from any to any port { 7890, 9090 }
@@ -211,7 +213,7 @@ pass in inet proto udp from any to any port { 1053 }
 sockstat -4 -l | egrep '7890|9090|1053'
 ```
 
-### 7.3 日常巡检命令
+### 7.3 Daily Inspection Commands
 
 ```sh
 clashctl status
@@ -221,7 +223,7 @@ route -n get default
 netstat -rn -f inet
 ```
 
-彻底回收：
+Full cleanup:
 
 ```sh
 bash uninstall.sh --purge-runtime
@@ -229,40 +231,38 @@ bash uninstall.sh --purge-runtime
 
 ---
 
-## 8. 云厂商场景模板（Vultr / OCI / 腾讯云）
+## 8. Cloud Provider Scenario Templates (Vultr / OCI / Tencent Cloud)
 
-### 8.1 通用模板（所有云通用）
+### 8.1 General Template (All Clouds)
 
-控制台侧（安全组/防火墙）：
-- [ ] TCP 入站：`22`
-- [ ] TCP 入站：`7890`
-- [ ] TCP 入站：`9090`（建议仅管理 IP）
-- [ ] UDP 入站：`1053`（启用 DNS 接管时）
-- [ ] 出站允许访问 GitHub/订阅地址
+Console-side (security group / firewall):
+- [ ] TCP inbound: `22`
+- [ ] TCP inbound: `7890`
+- [ ] TCP inbound: `9090` (recommended: management IP only)
+- [ ] UDP inbound: `1053` (when DNS interception is enabled)
+- [ ] Outbound: allow access to GitHub / subscription addresses
 
+### 8.2 Vultr Template
 
+- [ ] Add inbound rules in `Firewall Group` (TCP: 22/7890/9090, UDP: 1053 optional)
+- [ ] Confirm firewall policy is bound to the target instance
+- [ ] Run `sockstat -4 -l` on the host to verify listeners
 
-### 8.2 Vultr 模板
+### 8.3 Oracle Cloud (OCI) Template
 
-- [ ] 在 `Firewall Group` 添加入站规则（TCP: 22/7890/9090，UDP: 1053 可选）
-- [ ] 确认防火墙策略已绑定目标实例
-- [ ] 主机执行 `sockstat -4 -l` 校验监听
+- [ ] Add inbound rules in VCN `Security List` or `NSG`
+- [ ] Verify `Stateful/Stateless` policy and return path
+- [ ] For public-facing deployments, restrict `9090` to the ops egress IP
 
-### 8.3 Oracle Cloud（OCI）模板
+### 8.4 Tencent Cloud (CVM) Template
 
-- [ ] 在 VCN 的 `Security List` 或 `NSG` 添加入站规则
-- [ ] 校验 `Stateful/Stateless` 策略与回包路径
-- [ ] 公网场景建议将 `9090` 限制为运维出口 IP
+- [ ] Add inbound rules in the CVM security group
+- [ ] If cloud firewall is enabled, confirm no conflicts with security group rules
+- [ ] If using an elastic public IP, confirm it is correctly bound to the NIC
 
-### 8.4 腾讯云（CVM）模板
+### 8.5 Minimal Exposure Recommendations (Production)
 
-- [ ] 在 CVM 安全组添加入站规则
-- [ ] 若启用云防火墙，确认与安全组规则不冲突
-- [ ] 若用弹性公网 IP，确认已正确绑定网卡
-
-### 8.5 最小暴露建议（生产）
-
-`9090` 建议只对白名单放行。若不需要公网控制台：
+`9090` should be whitelist-only. If a public-facing console is not needed:
 
 ```sh
 sed -i '' 's/^export EXTERNAL_CONTROLLER=.*/export EXTERNAL_CONTROLLER="127.0.0.1:9090"/' .env
@@ -272,9 +272,9 @@ clashoff && clashon
 
 ---
 
-## 9. 仅内网管理模式模板（不暴露公网控制台）
+## 9. Intranet-Only Management Mode Template (No Public Console)
 
-### 9.1 控制面收敛（服务器执行）
+### 9.1 Control Plane Convergence (Server-side)
 
 ```sh
 sed -i '' 's/^export EXTERNAL_CONTROLLER=.*/export EXTERNAL_CONTROLLER="127.0.0.1:9090"/' .env
@@ -282,42 +282,42 @@ clashctl config regen
 clashoff && clashon
 ```
 
-如需同时收敛 mixed 端口：
+To also converge the mixed port:
 
 ```sh
 sed -i '' 's/^export MIXED_PORT=.*/export MIXED_PORT="7890"/' .env
 ```
 
-### 9.2 云防火墙/安全组策略
+### 9.2 Cloud Firewall / Security Group Policy
 
-- [ ] 关闭公网 `9090`
-- [ ] 仅保留 `22` 给运维出口 IP
-- [ ] `7890` 按业务需要放行
-- [ ] `1053` 默认不放公网
+- [ ] Disable public `9090`
+- [ ] Only keep `22` open for the ops egress IP
+- [ ] `7890` open according to business needs
+- [ ] `1053` not exposed to the public by default
 
-### 9.3 SSH 隧道访问控制台（运维端）
+### 9.3 SSH Tunnel to Access Console (Ops-side)
 
 ```sh
 ssh -N -L 19090:127.0.0.1:9090 <user>@<server_ip>
 ```
 
-本地访问：
+Local access:
 
 ```text
 http://127.0.0.1:19090/ui
 ```
 
-### 9.4 验收清单
+### 9.4 Acceptance Checklist
 
 ```sh
 sockstat -4 -l | egrep '22|7890|9090|1053'
 ```
 
-- `9090` 仅绑定 `127.0.0.1`
-- 公网不可直连 `9090`
-- SSH 隧道访问 `19090` 正常
+- `9090` is bound to `127.0.0.1` only
+- `9090` is not accessible from the public internet
+- SSH tunnel access via `19090` is working
 
-### 9.5 应急回切（临时公网运维）
+### 9.5 Emergency Rollback (Temporary Public Ops)
 
 ```sh
 sed -i '' 's/^export EXTERNAL_CONTROLLER=.*/export EXTERNAL_CONTROLLER="0.0.0.0:9090"/' .env
@@ -325,18 +325,18 @@ clashctl config regen
 clashoff && clashon
 ```
 
-完成运维后，请立即恢复内网模式并收紧安全组。
+After maintenance is complete, immediately revert to intranet mode and tighten security groups.
 
 ---
 
-## 🔗 引用
+## 🔗 References
 
 - [mihomo](https://github.com/MetaCubeX/mihomo)
 - [subconverter](https://github.com/tindy2013/subconverter)
 - [zashboard](https://github.com/Zephyruso/zashboard)
 
-## ⚠️ 特别声明
+## ⚠️ Disclaimer
 
-1. 本项目主要用于学习与研究 Shell 编程。
-2. 请勿将本项目用于违反法律法规或组织政策的用途。
-3. 使用者需自行承担部署与使用风险。
+1. This project is mainly for learning and researching Shell programming.
+2. Do not use this project for purposes that violate laws, regulations, or organizational policies.
+3. Users assume their own risks for deployment and usage.
