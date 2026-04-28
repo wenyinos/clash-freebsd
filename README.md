@@ -15,6 +15,8 @@ Other languages: [🇨🇳 简体中文](README.zh.md)
 - Mixin patch mechanism
 - One-click diagnostics with `clashctl doctor`
 - FreeBSD `rc.d` service management (`freebsd-rc` backend)
+- **Download integrity verification** with SHA256 checksums
+- **Concurrent operation protection** with file locking
 
 ## ⌨️ Command Overview
 

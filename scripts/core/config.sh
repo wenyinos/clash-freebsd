@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 注意：此文件被其他脚本 source，不设置 set -e 以避免影响调用方的错误处理策略
+set -u  # 未定义变量报错
 
 # shellcheck source=scripts/core/common.sh
 source "${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scripts/core/common.sh"
@@ -911,41 +913,20 @@ health_key_prefix() {
 read_subscription_health_value() {
   local name="$1"
   local field="$2"
-  local file key prefix
-
-  file="$(subscription_health_file)"
-  [ -f "$file" ] || return 1
+  local prefix
 
   prefix="$(health_key_prefix "$name")"
-  key="SUB_HEALTH_${prefix}_${field}"
-
-  sed -nE "s/^[[:space:]]*${key}=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1
+  kv_read "$(subscription_health_file)" "SUB_HEALTH_${prefix}_${field}"
 }
 
 write_subscription_health_value() {
   local name="$1"
   local field="$2"
   local value="$3"
-  local file key prefix
-
-  file="$(subscription_health_file)"
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
+  local prefix
 
   prefix="$(health_key_prefix "$name")"
-  key="SUB_HEALTH_${prefix}_${field}"
-
-  if grep -qE "^[[:space:]]*${key}=" "$file"; then
-    awk -v k="$key" -v v="$value" '
-      $0 ~ "^[[:space:]]*" k "=" {
-        print k "=\"" v "\""
-        next
-      }
-      { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
-  else
-    printf '%s="%s"\n' "$key" "$value" >> "$file"
-  fi
+  kv_write "$(subscription_health_file)" "SUB_HEALTH_${prefix}_${field}" "$value"
 }
 
 clear_subscription_health_all_fields() {
@@ -3015,6 +2996,10 @@ subconverter_running() {
 }
 
 start_subconverter() {
+  with_lock "subconverter" _start_subconverter_impl
+}
+
+_start_subconverter_impl() {
   local home bin log_file pid_file pid i old_pwd exit_status
 
   home="$(subconverter_home)"
@@ -3110,6 +3095,10 @@ start_subconverter() {
 }
 
 stop_subconverter() {
+  with_lock "subconverter" _stop_subconverter_impl
+}
+
+_stop_subconverter_impl() {
   local pid_file pid
 
   pid_file="$(subconverter_pid_file)"

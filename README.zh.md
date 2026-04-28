@@ -11,6 +11,8 @@
 - Mixin 补丁机制
 - `clashctl doctor` 一键诊断
 - FreeBSD `rc.d` 服务托管（`freebsd-rc` 后端）
+- **下载完整性验证**：SHA256 校验和验证
+- **并发操作保护**：文件锁机制
 
 ## ⌨️ 命令一览
 

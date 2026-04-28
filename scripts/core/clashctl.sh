@@ -1290,6 +1290,16 @@ status_is_running() {
   esac
 }
 
+ensure_runtime_ready() {
+  if ! status_is_running; then
+    die_state "代理内核未运行" "clashon"
+  fi
+
+  if ! proxy_controller_reachable 2>/dev/null; then
+    die_state "控制器不可访问" "clashctl doctor"
+  fi
+}
+
 apply_runtime_change_after_config_mutation() {
   if status_is_running; then
     info "检测到代理正在运行，正在自动重启以应用新配置"
@@ -5009,7 +5019,21 @@ tun_process_capability_text() {
   local pid cap_eff cap_value net_admin net_raw
 
   pid="$(tun_runtime_pid "$backend" 2>/dev/null || true)"
-  if [ -z "${pid:-}" ] || [ ! -r "/proc/$pid/status" ]; then
+  if [ -z "${pid:-}" ]; then
+    echo "未读取到运行中 mihomo 进程能力"
+    return 0
+  fi
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+    if [ "$(id -u)" -eq 0 ]; then
+      echo "pid=$pid，以 root 权限运行，具有完整网络权限"
+    else
+      echo "pid=$pid，以非 root 权限运行"
+    fi
+    return 0
+  fi
+
+  if [ ! -r "/proc/$pid/status" ]; then
     echo "未读取到运行中 mihomo 进程能力"
     return 0
   fi
@@ -5038,7 +5062,14 @@ tun_process_has_cap_net_admin() {
   local pid cap_eff cap_value
 
   pid="$(tun_runtime_pid "$backend" 2>/dev/null || true)"
-  [ -n "${pid:-}" ] && [ -r "/proc/$pid/status" ] || return 2
+  [ -n "${pid:-}" ] || return 2
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+    [ "$(id -u)" -eq 0 ] && return 0
+    return 1
+  fi
+
+  [ -r "/proc/$pid/status" ] || return 2
 
   cap_eff="$(sed -nE 's/^CapEff:[[:space:]]*([0-9a-fA-F]+)$/\1/p' "/proc/$pid/status" 2>/dev/null | head -n 1)"
   [ -n "${cap_eff:-}" ] || return 2
@@ -6202,14 +6233,7 @@ cmd_proxy_groups() {
   local group current type found="false"
 
   prepare
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   ui_title "📦 策略组列表"
   echo "  📦 名称                 类型         当前节点"
@@ -6235,14 +6259,7 @@ cmd_proxy_current() {
   local group current found="false"
 
   prepare
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   if [ -n "${1:-}" ]; then
     group="$1"
@@ -6277,14 +6294,7 @@ cmd_proxy_nodes() {
 
   prepare
   [ -n "${group:-}" ] || die "请使用 clashctl select 切换节点"
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   current="$(proxy_group_current_display "$group" 2>/dev/null || true)"
 
@@ -6490,14 +6500,7 @@ proxy_select_interactive() {
   local -a nodes=()
 
   prepare
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   if [ -z "${group:-}" ]; then
     ui_title "🚀 节点切换"
@@ -6618,14 +6621,7 @@ proxy_select_interactive_guarded() {
   local -a nodes=()
 
   prepare
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   if [ -z "${group:-}" ]; then
     ui_title "🚀 节点切换"
@@ -6899,14 +6895,7 @@ cmd_proxy_groups() {
   local group current type found="false"
 
   prepare
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   ui_title "📦 策略组列表"
   echo "  📦 名称                 类型         当前节点"
@@ -6931,14 +6920,7 @@ cmd_proxy_current() {
   local group current found="false"
 
   prepare
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   if [ -n "${1:-}" ]; then
     group="$1"
@@ -6971,14 +6953,7 @@ cmd_proxy_nodes() {
 
   prepare
   [ -n "${group:-}" ] || die "请使用 clashctl select 切换节点"
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   current="$(proxy_group_current_display "$group" 2>/dev/null || true)"
 
@@ -7059,14 +7034,7 @@ proxy_select_interactive_guarded() {
   local -a nodes=()
 
   prepare
-
-  if ! status_is_running; then
-    die_state "代理内核未运行" "clashon"
-  fi
-
-  if ! proxy_controller_reachable 2>/dev/null; then
-    die_state "控制器不可访问" "clashctl doctor"
-  fi
+  ensure_runtime_ready
 
   if [ -z "${group:-}" ]; then
     ui_title "🚀 节点切换"

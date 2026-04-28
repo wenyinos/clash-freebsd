@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 注意：此文件被其他脚本 source，不设置 set -e 以避免影响调用方的错误处理策略
+set -u  # 未定义变量报错
 
 # shellcheck source=scripts/core/common.sh
 source "${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scripts/core/common.sh"
@@ -6,7 +8,7 @@ source "${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scri
 source "${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}/scripts/core/config.sh"
 
 resolve_yq() {
-  local arch os version file extracted_bin url tmp_dir tmp_file
+  local arch os version file extracted_bin url tmp_dir tmp_file checksum_key
 
   arch="$(get_arch)"
   os="$(get_os)"
@@ -43,11 +45,14 @@ resolve_yq() {
   esac
 
   url="https://github.com/mikefarah/yq/releases/download/${version}/${file}"
+  checksum_key="YQ_${version}_${os}_${arch}"
   tmp_dir="$(mktemp -d)"
   tmp_file="$tmp_dir/$file"
 
+  trap 'rm -rf "'"${tmp_dir}"'" 2>/dev/null || true' EXIT
+
   if ! copy_bundled_asset "yq" "$version" "$file" "$tmp_file" "yq"; then
-    download_file "$url" "$tmp_file" "yq"
+    download_file "$url" "$tmp_file" "yq" "$checksum_key"
   fi
   tar -xzf "$tmp_file" -C "$tmp_dir"
 
@@ -61,11 +66,12 @@ resolve_yq() {
   fi
 
   rm -rf "$tmp_dir"
+  trap - EXIT
 }
 
 resolve_mihomo() {
   local arch os version file url tmp_file url_base custom_url downloaded
-  local candidates
+  local candidates checksum_key
 
   arch="$(get_arch)"
   os="$(get_os)"
@@ -105,19 +111,22 @@ mihomo-freebsd-arm64-v8-${version}.gz
       ;;
   esac
 
+  tmp_file="$(mktemp)"
+  trap 'rm -f "'"${tmp_file}"'" 2>/dev/null || true' EXIT
+
   if [ -n "${custom_url:-}" ]; then
     url="$custom_url"
-    tmp_file="$(mktemp)"
+    checksum_key="MIHOMO_CUSTOM_${version}"
     if ! copy_bundled_asset "mihomo" "$version" "${url##*/}" "$tmp_file" "mihomo"; then
-      download_file "$url" "$tmp_file" "mihomo（可在 .env 中设置 MIHOMO_DOWNLOAD_BASE / MIHOMO_DOWNLOAD_URL）"
+      download_file "$url" "$tmp_file" "mihomo（可在 .env 中设置 MIHOMO_DOWNLOAD_BASE / MIHOMO_DOWNLOAD_URL）" "$checksum_key"
     fi
   else
-    tmp_file="$(mktemp)"
     downloaded="false"
     for file in $candidates; do
       url="${url_base%/}/${version}/${file}"
+      checksum_key="MIHOMO_${version}_${file%.gz}"
       if copy_bundled_asset "mihomo" "$version" "$file" "$tmp_file" "mihomo" \
-        || download_file "$url" "$tmp_file" "mihomo"; then
+        || download_file "$url" "$tmp_file" "mihomo" "$checksum_key"; then
         downloaded="true"
         break
       fi
@@ -132,6 +141,7 @@ mihomo-freebsd-arm64-v8-${version}.gz
   gzip -dc "$tmp_file" > "$(mihomo_bin)"
   chmod +x "$(mihomo_bin)"
   rm -f "$tmp_file"
+  trap - EXIT
 }
 
 resolve_clash() {
@@ -568,6 +578,12 @@ wait_runtime_controller_ready() {
 start_runtime() {
   local config_file="$RUNTIME_DIR/config.yaml"
 
+  with_lock "runtime_process" _start_runtime_impl "$config_file"
+}
+
+_start_runtime_impl() {
+  local config_file="$1"
+
   resolve_runtime_kernel
   if [ -s "$config_file" ]; then
     ensure_mihomo_geodata_ready "$config_file" || die "因 GEOIP 依赖未就绪，当前配置无法启动：$config_file"
@@ -608,6 +624,10 @@ start_runtime() {
 }
 
 stop_runtime() {
+  with_lock "runtime_process" _stop_runtime_impl
+}
+
+_stop_runtime_impl() {
   local pid_file="$RUNTIME_DIR/mihomo.pid"
 
   [ -f "$pid_file" ] || {

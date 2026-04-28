@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 注意：此文件被其他脚本 source，不设置 set -e 以避免影响调用方的错误处理策略
+set -u  # 未定义变量报错
 
 _clashctl_real() {
   if command -v clashctl-bin >/dev/null 2>&1; then

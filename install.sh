@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-sed -i 's/\r$//' "$0" 2>/dev/null || true
+sed 's/\r$//' "$0" > "${0}.tmp" 2>/dev/null && mv "${0}.tmp" "$0" || rm -f "${0}.tmp"
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 

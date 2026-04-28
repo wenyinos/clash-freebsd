@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 注意：此文件被其他脚本 source，不设置 set -e 以避免影响调用方的错误处理策略
+set -u  # 未定义变量报错
 
 freebsd_service_name() {
   echo "clash_freebsd"
@@ -17,24 +19,7 @@ freebsd_require_root() {
 }
 
 write_freebsd_autostart_value() {
-  local value="$1"
-  local file
-  file="$(freebsd_rc_conf_file)"
-
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
-
-  if grep -qE "^[[:space:]]*$(freebsd_service_name)_enable=" "$file" 2>/dev/null; then
-    awk -v k="$(freebsd_service_name)_enable" -v v="$value" '
-      $0 ~ "^[[:space:]]*" k "=" {
-        print k "=\"" v "\""
-        next
-      }
-      { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
-  else
-    printf '%s="%s"\n' "$(freebsd_service_name)_enable" "$value" >> "$file"
-  fi
+  kv_write "$(freebsd_rc_conf_file)" "$(freebsd_service_name)_enable" "$1"
 }
 
 install_freebsd_entry() {

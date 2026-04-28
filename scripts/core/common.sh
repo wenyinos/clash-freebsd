@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 注意：此文件被其他脚本 source，不设置 set -e 以避免影响调用方的错误处理策略
+# 入口脚本（install.sh, clashctl.sh, uninstall.sh）已设置 set -euo pipefail
+set -u  # 未定义变量报错，有助于捕获拼写错误
 
 : "${PROJECT_DIR:=}"
 : "${INSTALL_SCOPE:=}"
@@ -19,6 +22,87 @@ info()     { printf 'ℹ %s\n' "$*"; }
 success()  { printf '✔ %s\n' "$*"; }
 warn()     { printf '⚠ %s\n' "$*" >&2; }
 error()    { printf '✘ %s\n' "$*" >&2; }
+
+LOCK_DIR="${RUNTIME_DIR:-/tmp}/locks"
+
+lock_file_path() {
+  local lock_name="$1"
+  echo "${LOCK_DIR}/${lock_name}.lock"
+}
+
+acquire_lock() {
+  local lock_name="$1"
+  local timeout="${2:-10}"
+  local lock_dir lock_file lock_pid
+  local start_time elapsed
+
+  lock_dir="$(lock_file_path "$lock_name")"
+  lock_file="${lock_dir}/pid"
+  mkdir -p "$(dirname "$lock_dir")"
+
+  start_time=$(date +%s 2>/dev/null || echo 0)
+
+  while true; do
+    if mkdir "$lock_dir" 2>/dev/null; then
+      echo $$ > "$lock_file"
+      return 0
+    fi
+
+    if [ -f "$lock_file" ]; then
+      lock_pid="$(cat "$lock_file" 2>/dev/null || true)"
+      if [ -n "${lock_pid:-}" ] && ! kill -0 "$lock_pid" 2>/dev/null; then
+        rm -rf "$lock_dir" 2>/dev/null || true
+        continue
+      fi
+    fi
+
+    elapsed=$(( $(date +%s 2>/dev/null || echo 0) - start_time ))
+    if [ "$elapsed" -ge "$timeout" ]; then
+      error "获取锁超时：${lock_name}（${timeout}s）"
+      error "如果有其他 clashctl 进程在运行，请等待其完成"
+      return 1
+    fi
+
+    sleep 0.1 2>/dev/null || sleep 1
+  done
+}
+
+release_lock() {
+  local lock_name="$1"
+  local lock_dir
+
+  lock_dir="$(lock_file_path "$lock_name")"
+  rm -rf "$lock_dir" 2>/dev/null || true
+}
+
+with_lock() {
+  local lock_name="$1"
+  shift
+  local timeout="${LOCK_TIMEOUT:-10}"
+
+  acquire_lock "$lock_name" "$timeout" || return 1
+  "$@"
+  local rc=$?
+  release_lock "$lock_name"
+  return $rc
+}
+
+resolve_path() {
+  local path="$1"
+
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$path" 2>/dev/null || echo "$path"
+    return 0
+  fi
+
+  if command -v readlink >/dev/null 2>&1 && readlink -f "$path" >/dev/null 2>&1; then
+    readlink -f "$path" 2>/dev/null || echo "$path"
+    return 0
+  fi
+
+  cd "$(dirname "$path")" 2>/dev/null && echo "$(pwd)/$(basename "$path")"
+  cd - >/dev/null 2>&1 || true
+}
 
 permission_denied_requires_root_or_sudo() {
   local text
@@ -445,6 +529,73 @@ download_hash_key() {
   printf '%s' "$text" | cksum | awk '{print $1 "-" $2}'
 }
 
+file_sha256() {
+  local file="$1"
+
+  [ -f "$file" ] || return 1
+
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+    return 0
+  fi
+
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+    return 0
+  fi
+
+  return 1
+}
+
+verify_sha256() {
+  local file="$1"
+  local expected="$2"
+  local actual
+
+  [ -n "${expected:-}" ] || return 0
+  [ -f "$file" ] || return 1
+
+  actual="$(file_sha256 "$file")" || {
+    warn "无法计算文件校验和（系统缺少 sha256sum 或 shasum）"
+    return 0
+  }
+
+  if [ "$actual" = "$expected" ]; then
+    return 0
+  fi
+
+  error "校验和不匹配：${file}"
+  error "  期望：${expected}"
+  error "  实际：${actual}"
+  return 1
+}
+
+checksums_file() {
+  echo "$RUNTIME_DIR/checksums.env"
+}
+
+read_checksum_value() {
+  kv_read "$(checksums_file)" "$1"
+}
+
+write_checksum_value() {
+  kv_write "$(checksums_file)" "$1" "$2"
+}
+
+verify_downloaded_asset() {
+  local file="$1"
+  local asset_key="$2"
+  local expected_checksum
+
+  expected_checksum="$(read_checksum_value "$asset_key" 2>/dev/null || true)"
+
+  if [ -z "${expected_checksum:-}" ]; then
+    return 0
+  fi
+
+  verify_sha256 "$file" "$expected_checksum"
+}
+
 download_cache_key() {
   local url="$1"
   download_hash_key "$url"
@@ -647,39 +798,20 @@ download_mirror_state_key() {
 read_download_mirror_state() {
   local label="$1"
   local field="$2"
-  local file key
-
-  file="$(download_mirror_state_file)"
-  [ -f "$file" ] || return 1
+  local key
 
   key="DOWNLOAD_MIRROR_$(download_mirror_state_key "$label")_${field}"
-
-  sed -nE "s/^[[:space:]]*${key}=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1
+  kv_read "$(download_mirror_state_file)" "$key"
 }
 
 write_download_mirror_state() {
   local label="$1"
   local field="$2"
   local value="$3"
-  local file key
-
-  file="$(download_mirror_state_file)"
-  mkdir -p "$(dirname "$file")"
-  touch "$file"
+  local key
 
   key="DOWNLOAD_MIRROR_$(download_mirror_state_key "$label")_${field}"
-
-  if grep -qE "^[[:space:]]*${key}=" "$file"; then
-    awk -v k="$key" -v v="$value" '
-      $0 ~ "^[[:space:]]*" k "=" {
-        print k "=\"" v "\""
-        next
-      }
-      { print }
-    ' "$file" > "${file}.tmp" && mv "${file}.tmp" "$file"
-  else
-    printf '%s="%s"\n' "$key" "$value" >> "$file"
-  fi
+  kv_write "$(download_mirror_state_file)" "$key" "$value"
 }
 
 record_download_mirror_success() {
@@ -859,11 +991,13 @@ download_file() {
   local url="$1"
   local out="$2"
   local asset_name="${3:-$(basename "$url")}"
+  local checksum_key="${4:-}"
 
   local ordered_entries entry candidate_url label attempt_mode
   local probed_any="false"
   local tried_urls=""
   local fetch_tmp
+  local _prev_trap
 
   mkdir -p "$(dirname "$out")"
   rm -f "$out" 2>/dev/null || true
@@ -871,10 +1005,18 @@ download_file() {
   fetch_tmp="$(mktemp)"
   rm -f "$fetch_tmp" 2>/dev/null || true
 
+  _prev_trap="$(trap -p EXIT | sed "s/trap -- '//;s/' EXIT$//" || true)"
+  trap 'rm -f "'"${fetch_tmp}"'" 2>/dev/null || true; '"${_prev_trap}" EXIT
+
   if ! github_url_is_mirrorable "$url"; then
     ui_download "正在下载：${asset_name}"
 
     if download_candidate_fetch "$url" "$fetch_tmp" "$asset_name"; then
+      if [ -n "${checksum_key:-}" ] && ! verify_downloaded_asset "$fetch_tmp" "$checksum_key"; then
+        rm -f "$fetch_tmp" 2>/dev/null || true
+        die_state "下载的文件校验失败：${asset_name}" \
+                  "文件可能被篡改，请检查下载源或网络环境"
+      fi
       mv -f "$fetch_tmp" "$out"
       download_cache_store "$url" "$out" "$url"
       return 0
@@ -925,6 +1067,14 @@ download_file() {
       fi
 
       if download_candidate_fetch "$candidate_url" "$fetch_tmp" "$asset_name"; then
+        if [ -n "${checksum_key:-}" ] && ! verify_downloaded_asset "$fetch_tmp" "$checksum_key"; then
+          record_download_mirror_failure "$label" "$candidate_url"
+          rm -f "$fetch_tmp" 2>/dev/null || true
+          fetch_tmp="$(mktemp)"
+          rm -f "$fetch_tmp" 2>/dev/null || true
+          tried_urls="${tried_urls}${candidate_url}"$'\n'
+          continue
+        fi
         mv -f "$fetch_tmp" "$out"
         download_cache_store "$url" "$out" "$candidate_url"
         record_download_mirror_success "$label" "$candidate_url"
@@ -1049,7 +1199,7 @@ openwrt_dependency_hint() {
 openwrt_project_dir_is_persistent() {
   local resolved
 
-  resolved="$(readlink -f "$PROJECT_DIR" 2>/dev/null || echo "$PROJECT_DIR")"
+  resolved="$(resolve_path "$PROJECT_DIR")"
   case "$resolved" in
     /tmp|/tmp/*|/run|/run/*|/var/run|/var/run/*|/dev/shm|/dev/shm/*)
       return 1
@@ -1335,42 +1485,15 @@ extract_tar_gz_strip1() {
 }
 
 write_env_value() {
-  local key="$1"
-  local value="$2"
-  local file="$PROJECT_DIR/.env"
-
-  ensure_kv_file_writable_or_die "$file"
-
-  if grep -qE "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file"; then
-    awk -v k="$key" -v v="$value" '
-      $0 ~ "^[[:space:]]*(export[[:space:]]+)?" k "=" {
-        print "export " k "=\"" v "\""
-        next
-      }
-      { print }
-    ' "$file" > "${file}.tmp" && command mv -f "${file}.tmp" "$file"
-  else
-    printf 'export %s="%s"\n' "$key" "$value" >> "$file"
-  fi
+  with_lock "env_file" kv_write "$PROJECT_DIR/.env" "$1" "$2" "export "
 }
 
 read_env_value() {
-  local key="$1"
-  local file="$PROJECT_DIR/.env"
-  [ -f "$file" ] || return 1
-  sed -nE "s/^[[:space:]]*(export[[:space:]]+)?${key}=['\"]?([^'\"]*)['\"]?$/\2/p" "$file" | head -n 1
+  kv_read "$PROJECT_DIR/.env" "$1"
 }
 
 unset_env_value() {
-  local key="$1"
-  local file="$PROJECT_DIR/.env"
-  [ -f "$file" ] || return 0
-  ensure_kv_file_writable_or_die "$file"
-
-  awk -v k="$key" '
-    $0 ~ "^[[:space:]]*(export[[:space:]]+)?" k "=" { next }
-    { print }
-  ' "$file" > "${file}.tmp" && command mv -f "${file}.tmp" "$file"
+  with_lock "env_file" kv_unset "$PROJECT_DIR/.env" "$1" "export "
 }
 
 subscription_auto_update_enabled() {
@@ -1444,33 +1567,54 @@ ensure_kv_file_writable_or_die() {
   touch "$file" 2>/dev/null || die_state "Permission denied: 无法创建文件 $file" "请通过 root 用户或 sudo 重新运行"
 }
 
-write_runtime_value() {
-  local key="$1"
-  local value="$2"
-  local file
-  file="$(runtime_meta_file)"
+kv_read() {
+  local file="$1"
+  local key="$2"
+  [ -f "$file" ] || return 1
+  sed -nE "s/^[[:space:]]*(export[[:space:]]+)?${key}=['\"]?([^'\"]*)['\"]?$/\2/p" "$file" | head -n 1
+}
+
+kv_write() {
+  local file="$1"
+  local key="$2"
+  local value="$3"
+  local prefix="${4:-}"
 
   ensure_kv_file_writable_or_die "$file"
 
-  if grep -qE "^[[:space:]]*${key}=" "$file"; then
-    awk -v k="$key" -v v="$value" '
-      $0 ~ "^[[:space:]]*" k "=" {
-        print k "=\"" v "\""
+  if grep -qE "^[[:space:]]*(export[[:space:]]+)?${key}=" "$file"; then
+    awk -v k="$key" -v v="$value" -v p="$prefix" '
+      $0 ~ "^[[:space:]]*(export[[:space:]]+)?" k "=" {
+        print p k "=\"" v "\""
         next
       }
       { print }
     ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
   else
-    printf '%s="%s"\n' "$key" "$value" >> "$file"
+    printf '%s%s="%s"\n' "$prefix" "$key" "$value" >> "$file"
   fi
 }
 
+kv_unset() {
+  local file="$1"
+  local key="$2"
+  local prefix="${3:-}"
+
+  [ -f "$file" ] || return 0
+  ensure_kv_file_writable_or_die "$file"
+
+  awk -v k="$key" -v p="$prefix" '
+    $0 ~ "^[[:space:]]*(export[[:space:]]+)?" k "=" { next }
+    { print }
+  ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
+}
+
+write_runtime_value() {
+  with_lock "runtime_meta" kv_write "$(runtime_meta_file)" "$1" "$2"
+}
+
 read_runtime_value() {
-  local key="$1"
-  local file
-  file="$(runtime_meta_file)"
-  [ -f "$file" ] || return 1
-  sed -nE "s/^[[:space:]]*${key}=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1
+  kv_read "$(runtime_meta_file)" "$1"
 }
 
 install_env_os() { read_runtime_value "INSTALL_ENV_OS" 2>/dev/null || true; }
@@ -1518,65 +1662,19 @@ tun_state_file() {
 }
 
 write_tun_value() {
-  local key="$1"
-  local value="$2"
-  local file
-
-  file="$(tun_state_file)"
-  ensure_kv_file_writable_or_die "$file"
-
-  if grep -qE "^[[:space:]]*${key}=" "$file"; then
-    awk -v k="$key" -v v="$value" '
-      $0 ~ "^[[:space:]]*" k "=" {
-        print k "=\"" v "\""
-        next
-      }
-      { print }
-    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
-  else
-    printf '%s="%s"\n' "$key" "$value" >> "$file"
-  fi
+  kv_write "$(tun_state_file)" "$1" "$2"
 }
 
 read_tun_value() {
-  local key="$1"
-  local file
-
-  file="$(tun_state_file)"
-  [ -f "$file" ] || return 1
-
-  sed -nE "s/^[[:space:]]*${key}=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1
+  kv_read "$(tun_state_file)" "$1"
 }
 
 write_runtime_event_value() {
-  local key="$1"
-  local value="$2"
-  local file
-
-  file="$(runtime_event_file)"
-  ensure_kv_file_writable_or_die "$file"
-
-  if grep -qE "^[[:space:]]*${key}=" "$file"; then
-    awk -v k="$key" -v v="$value" '
-      $0 ~ "^[[:space:]]*" k "=" {
-        print k "=\"" v "\""
-        next
-      }
-      { print }
-    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
-  else
-    printf '%s="%s"\n' "$key" "$value" >> "$file"
-  fi
+  kv_write "$(runtime_event_file)" "$1" "$2"
 }
 
 read_runtime_event_value() {
-  local key="$1"
-  local file
-
-  file="$(runtime_event_file)"
-  [ -f "$file" ] || return 1
-
-  sed -nE "s/^[[:space:]]*${key}=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1
+  kv_read "$(runtime_event_file)" "$1"
 }
 
 clear_runtime_build_result_event() {
@@ -1610,32 +1708,11 @@ clear_runtime_event_file() {
 }
 
 write_build_value() {
-  local key="$1"
-  local value="$2"
-  local file
-  file="$(build_meta_file)"
-
-  ensure_kv_file_writable_or_die "$file"
-
-  if grep -qE "^[[:space:]]*${key}=" "$file"; then
-    awk -v k="$key" -v v="$value" '
-      $0 ~ "^[[:space:]]*" k "=" {
-        print k "=\"" v "\""
-        next
-      }
-      { print }
-    ' "$file" > "${file}.tmp" && mv -f "${file}.tmp" "$file"
-  else
-    printf '%s="%s"\n' "$key" "$value" >> "$file"
-  fi
+  kv_write "$(build_meta_file)" "$1" "$2"
 }
 
 read_build_value() {
-  local key="$1"
-  local file
-  file="$(build_meta_file)"
-  [ -f "$file" ] || return 1
-  sed -nE "s/^[[:space:]]*${key}=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1
+  kv_read "$(build_meta_file)" "$1"
 }
 
 clear_build_meta() {
@@ -1970,9 +2047,16 @@ container_env_type() {
     return 0
   fi
 
-  if grep -qaE '(docker|containerd|kubepods|lxc)' /proc/1/cgroup 2>/dev/null; then
+  if [ -d "/proc" ] && grep -qaE '(docker|containerd|kubepods|lxc)' /proc/1/cgroup 2>/dev/null; then
     echo "container"
     return 0
+  fi
+
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+    if sysctl -n security.jail.jailed 2>/dev/null | grep -q '^1$'; then
+      echo "jail"
+      return 0
+    fi
   fi
 
   echo "host"
@@ -2528,9 +2612,9 @@ cleanup_legacy_shell_entries() {
   for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
     [ -f "$shell_rc" ] || continue
 
-    sed -i '\|/root/clashctl/scripts/cmd/clashctl.sh|d' "$shell_rc" 2>/dev/null || true
-    sed -i '\|watch_proxy|d' "$shell_rc" 2>/dev/null || true
-    sed -i '\|/root/clashctl|d' "$shell_rc" 2>/dev/null || true
+    sed '\|/root/clashctl/scripts/cmd/clashctl.sh|d' "$shell_rc" > "${shell_rc}.tmp" 2>/dev/null && mv "${shell_rc}.tmp" "$shell_rc" || rm -f "${shell_rc}.tmp"
+    sed '\|watch_proxy|d' "$shell_rc" > "${shell_rc}.tmp" 2>/dev/null && mv "${shell_rc}.tmp" "$shell_rc" || rm -f "${shell_rc}.tmp"
+    sed '\|/root/clashctl|d' "$shell_rc" > "${shell_rc}.tmp" 2>/dev/null && mv "${shell_rc}.tmp" "$shell_rc" || rm -f "${shell_rc}.tmp"
   done
 }
 
