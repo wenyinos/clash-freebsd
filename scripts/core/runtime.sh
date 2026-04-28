@@ -578,12 +578,6 @@ wait_runtime_controller_ready() {
 start_runtime() {
   local config_file="$RUNTIME_DIR/config.yaml"
 
-  with_lock "runtime_process" _start_runtime_impl "$config_file"
-}
-
-_start_runtime_impl() {
-  local config_file="$1"
-
   resolve_runtime_kernel
   if [ -s "$config_file" ]; then
     ensure_mihomo_geodata_ready "$config_file" || die "因 GEOIP 依赖未就绪，当前配置无法启动：$config_file"
@@ -624,10 +618,6 @@ _start_runtime_impl() {
 }
 
 stop_runtime() {
-  with_lock "runtime_process" _stop_runtime_impl
-}
-
-_stop_runtime_impl() {
   local pid_file="$RUNTIME_DIR/mihomo.pid"
 
   [ -f "$pid_file" ] || {

@@ -23,70 +23,6 @@ success()  { printf '✔ %s\n' "$*"; }
 warn()     { printf '⚠ %s\n' "$*" >&2; }
 error()    { printf '✘ %s\n' "$*" >&2; }
 
-LOCK_DIR="${RUNTIME_DIR:-/tmp}/locks"
-
-lock_file_path() {
-  local lock_name="$1"
-  echo "${LOCK_DIR}/${lock_name}.lock"
-}
-
-acquire_lock() {
-  local lock_name="$1"
-  local timeout="${2:-10}"
-  local lock_dir lock_file lock_pid
-  local start_time elapsed
-
-  lock_dir="$(lock_file_path "$lock_name")"
-  lock_file="${lock_dir}/pid"
-  mkdir -p "$(dirname "$lock_dir")"
-
-  start_time=$(date +%s 2>/dev/null || echo 0)
-
-  while true; do
-    if mkdir "$lock_dir" 2>/dev/null; then
-      echo $$ > "$lock_file"
-      return 0
-    fi
-
-    if [ -f "$lock_file" ]; then
-      lock_pid="$(cat "$lock_file" 2>/dev/null || true)"
-      if [ -n "${lock_pid:-}" ] && ! kill -0 "$lock_pid" 2>/dev/null; then
-        rm -rf "$lock_dir" 2>/dev/null || true
-        continue
-      fi
-    fi
-
-    elapsed=$(( $(date +%s 2>/dev/null || echo 0) - start_time ))
-    if [ "$elapsed" -ge "$timeout" ]; then
-      error "获取锁超时：${lock_name}（${timeout}s）"
-      error "如果有其他 clashctl 进程在运行，请等待其完成"
-      return 1
-    fi
-
-    sleep 0.1 2>/dev/null || sleep 1
-  done
-}
-
-release_lock() {
-  local lock_name="$1"
-  local lock_dir
-
-  lock_dir="$(lock_file_path "$lock_name")"
-  rm -rf "$lock_dir" 2>/dev/null || true
-}
-
-with_lock() {
-  local lock_name="$1"
-  shift
-  local timeout="${LOCK_TIMEOUT:-10}"
-
-  acquire_lock "$lock_name" "$timeout" || return 1
-  "$@"
-  local rc=$?
-  release_lock "$lock_name"
-  return $rc
-}
-
 resolve_path() {
   local path="$1"
 
@@ -1485,7 +1421,7 @@ extract_tar_gz_strip1() {
 }
 
 write_env_value() {
-  with_lock "env_file" kv_write "$PROJECT_DIR/.env" "$1" "$2" "export "
+  kv_write "$PROJECT_DIR/.env" "$1" "$2" "export "
 }
 
 read_env_value() {
@@ -1493,7 +1429,7 @@ read_env_value() {
 }
 
 unset_env_value() {
-  with_lock "env_file" kv_unset "$PROJECT_DIR/.env" "$1" "export "
+  kv_unset "$PROJECT_DIR/.env" "$1" "export "
 }
 
 subscription_auto_update_enabled() {
@@ -1610,7 +1546,7 @@ kv_unset() {
 }
 
 write_runtime_value() {
-  with_lock "runtime_meta" kv_write "$(runtime_meta_file)" "$1" "$2"
+  kv_write "$(runtime_meta_file)" "$1" "$2"
 }
 
 read_runtime_value() {

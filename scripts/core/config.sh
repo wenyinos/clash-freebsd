@@ -2996,10 +2996,6 @@ subconverter_running() {
 }
 
 start_subconverter() {
-  with_lock "subconverter" _start_subconverter_impl
-}
-
-_start_subconverter_impl() {
   local home bin log_file pid_file pid i old_pwd exit_status
 
   home="$(subconverter_home)"
@@ -3095,10 +3091,6 @@ _start_subconverter_impl() {
 }
 
 stop_subconverter() {
-  with_lock "subconverter" _stop_subconverter_impl
-}
-
-_stop_subconverter_impl() {
   local pid_file pid
 
   pid_file="$(subconverter_pid_file)"
