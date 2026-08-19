@@ -1919,10 +1919,6 @@ status_risk_reason_lines() {
   if [ "$tun_container_mode" = "container-risky" ]; then
     echo "• 当前 Tun 运行环境属于高风险容器场景"
   fi
-
-  if [ "$tun_enabled" = "true" ] && [ "$tun_kernel_support" = "limited" ]; then
-    echo "• 当前 Tun 运行在 clash 内核上，仅按降级支持处理"
-  fi
 }
 
 status_recommendation_lines() {
@@ -3732,7 +3728,7 @@ cmd_config() {
       ;;
     kernel)
       shift || true
-      [ -n "${1:-}" ] || die_usage "内核类型不能为空" "clashctl config kernel <mihomo|clash>"
+      [ -n "${1:-}" ] || die_usage "内核类型不能为空" "clashctl config kernel <mihomo>"
       write_runtime_kernel_type "$1"
       resolve_runtime_kernel
       regenerate_config
@@ -3746,7 +3742,7 @@ cmd_config() {
       echo "  clashctl config show"
       echo "  clashctl config explain"
       echo "  clashctl config regen"
-      echo "  clashctl config kernel <mihomo|clash>"
+      echo "  clashctl config kernel <mihomo>"
       echo
       echo "🧩 说明："
       echo "  当前编译链固定为 active-only"
@@ -5591,9 +5587,6 @@ tun_recommendation_lines() {
 
     echo "1. Tun 已生效，可继续使用"
     echo "2. 如需恢复普通代理模式，执行：clashctl tun off"
-    if [ "$kernel_support" = "limited" ]; then
-      echo "3. 当前 Tun 运行在 clash 内核上，如需更稳妥体验可切换：clashctl config kernel mihomo"
-    fi
 
     return 0
   fi
@@ -6705,14 +6698,14 @@ cmd_upgrade() {
 
   while [ $# -gt 0 ]; do
     case "$1" in
-      mihomo|clash)
+      mihomo)
         target_kernel="$1"
         ;;
       -v|--verbose)
         verbose="true"
         ;;
       *)
-        die_usage "upgrade 参数不合法" "clashctl upgrade [mihomo|clash] [-v|--verbose]"
+        die_usage "upgrade 参数不合法" "clashctl upgrade [mihomo] [-v|--verbose]"
         ;;
     esac
     shift

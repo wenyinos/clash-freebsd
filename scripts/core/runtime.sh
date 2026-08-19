@@ -91,77 +91,6 @@ resolve_mihomo() {
   [ -x "$(mihomo_bin)" ] || die "pkg 安装后 mihomo 仍不可执行：$(mihomo_bin)"
 }
 
-resolve_clash() {
-  local arch os version version_no_v url_base tmp_file url downloaded="false"
-  local candidates file
-
-  arch="$(get_arch)"
-  os="$(get_os)"
-  version="${CLASH_VERSION:-$DEFAULT_CLASH_VERSION}"
-  version_no_v="${version#v}"
-  url_base="${CLASH_DOWNLOAD_BASE:-https://github.com/WindSpiritSR/clash/releases/download}"
-
-  if [ "$os" = "freebsd" ]; then
-    die_state "FreeBSD 当前仅支持 mihomo 内核，clash 内核自动安装不可用" \
-              "请设置 KERNEL_TYPE=mihomo 后重新执行（例如：export KERNEL_TYPE=mihomo）"
-  fi
-
-  if [ -x "$(clash_bin)" ] \
-    && [ "$(read_runtime_value "KERNEL_TYPE_INSTALLED" 2>/dev/null || true)" = "clash" ] \
-    && [ "$(read_runtime_value "CLASH_VERSION_INSTALLED" 2>/dev/null || true)" = "$version" ]; then
-    return 0
-  fi
-
-  case "$arch" in
-    amd64)
-      candidates="
-clash-linux-amd64-${version}.gz
-clash-linux-amd64-v${version_no_v}.gz
-"
-      ;;
-    arm64)
-      candidates="
-clash-linux-arm64-${version}.gz
-clash-linux-arm64-v${version_no_v}.gz
-clash-linux-armv8-${version}.gz
-clash-linux-armv8-v${version_no_v}.gz
-"
-      ;;
-    armv7)
-      candidates="
-clash-linux-armv7-${version}.gz
-clash-linux-armv7-v${version_no_v}.gz
-"
-      ;;
-    *)
-      die "暂不支持的 Clash 架构：$arch"
-      ;;
-  esac
-
-  tmp_file="$(mktemp)"
-  rm -f "$tmp_file"
-
-  for file in $candidates; do
-    url="${url_base}/${version}/${file}"
-
-    if download_file "$url" "$tmp_file" "clash"; then
-      downloaded="true"
-      break
-    fi
-  done
-
-  [ "$downloaded" = "true" ] || {
-    rm -f "$tmp_file"
-    die "Clash 内核下载失败，请检查版本或在 .env 中覆盖 CLASH_DOWNLOAD_BASE / CLASH_VERSION"
-  }
-
-  gzip -dc "$tmp_file" > "$(clash_bin)"
-  chmod +x "$(clash_bin)"
-  rm -f "$tmp_file"
-
-  write_runtime_value "KERNEL_TYPE_INSTALLED" "clash"
-  write_runtime_value "CLASH_VERSION_INSTALLED" "$version"
-}
 
 resolve_runtime_kernel() {
   case "$(runtime_kernel_type)" in
@@ -169,9 +98,6 @@ resolve_runtime_kernel() {
       resolve_mihomo
       write_runtime_value "KERNEL_TYPE_INSTALLED" "mihomo"
       write_runtime_value "MIHOMO_VERSION_INSTALLED" "pkg-managed"
-      ;;
-    clash)
-      resolve_clash
       ;;
     *)
       die "未知内核类型：$(runtime_kernel_type)"

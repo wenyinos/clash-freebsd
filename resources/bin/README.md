@@ -2,7 +2,7 @@
 
 如果安装时 GitHub 下载太慢，可以把 yq 提前放到本目录。安装和 `clashctl upgrade` 会优先读取这里的文件；没有匹配文件时，仍会回退到原来的下载逻辑。
 
-Clash 是兼容内核，固定走远程下载，不使用本目录中的本地资源。FreeBSD 下 mihomo 由 pkg 管理，无需放置资源文件。
+FreeBSD 下 mihomo 由 pkg 管理，无需放置资源文件。
 
 默认目录结构（推荐）：
 

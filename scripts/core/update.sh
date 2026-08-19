@@ -94,19 +94,12 @@ remove_mihomo_binary() {
   return 0
 }
 
-remove_clash_binary() {
-  rm -f "$(clash_bin)" 2>/dev/null || true
-}
-
 kernel_target_version() {
   local kernel="$1"
 
   case "$(normalize_kernel_type "$kernel")" in
     mihomo)
       echo "pkg 仓库最新版"
-      ;;
-    clash)
-      echo "${CLASH_VERSION:-$DEFAULT_CLASH_VERSION}"
       ;;
   esac
 }
@@ -117,9 +110,6 @@ kernel_binary_path() {
   case "$(normalize_kernel_type "$kernel")" in
     mihomo)
       mihomo_bin
-      ;;
-    clash)
-      clash_bin
       ;;
   esac
 }
@@ -167,12 +157,6 @@ upgrade_runtime_kernel() {
       info "正在通过 pkg 升级 mihomo 内核（版本以 pkg 仓库为准）"
       pkg upgrade -y mihomo || die "mihomo pkg 升级失败"
       [ -x "$(mihomo_bin)" ] || die "mihomo 内核升级失败"
-      ;;
-    clash)
-      info "正在升级 clash 内核"
-      remove_clash_binary
-      resolve_clash
-      [ -x "$(clash_bin)" ] || die "clash 内核升级失败"
       ;;
     *)
       die "未知内核类型：$target_kernel"

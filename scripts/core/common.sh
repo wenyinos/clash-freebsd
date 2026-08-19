@@ -12,7 +12,6 @@ set -u  # 未定义变量报错，有助于捕获拼写错误
 : "${CONFIG_DIR:=}"
 : "${RESOURCE_DIR:=}"
 
-DEFAULT_CLASH_VERSION="${CLASH_VERSION:-v1.18.0}"
 DEFAULT_YQ_VERSION="${YQ_VERSION:-v4.52.4}"
 
 log()      { printf '%s\n' "$*"; }
@@ -1145,7 +1144,7 @@ ensure_openwrt_install_supported() {
       ;;
     *)
       die_state "OpenWrt 脚本模式暂只支持 x86_64/amd64 与 aarch64/arm64，当前架构：$arch" \
-                "如需 MIPS/armv7，请先确认 mihomo/clash、yq 都有可用二进制"
+                "如需 MIPS/armv7，请先确认 mihomo、yq 都有可用二进制"
       ;;
   esac
 
@@ -2213,20 +2212,13 @@ mihomo_bin() {
   echo "/usr/local/bin/mihomo"
 }
 
-clash_bin() {
-  echo "$BIN_DIR/clash"
-}
-
 normalize_kernel_type() {
   case "${1:-mihomo}" in
-    mihomo|clash)
-      echo "${1:-mihomo}"
-      ;;
-    "")
+    mihomo|"")
       echo "mihomo"
       ;;
     *)
-      die "不支持的内核类型：$1（只允许 mihomo / clash）"
+      die "不支持的内核类型：$1（当前仅支持 mihomo）"
       ;;
   esac
 }
@@ -2278,9 +2270,6 @@ tun_kernel_support_reason() {
     mihomo)
       echo "当前内核为 mihomo，Tun 作为主支持能力处理"
       ;;
-    clash)
-      echo "当前内核为 clash，Tun 仅按降级支持处理，稳定性可能弱于 mihomo"
-      ;;
     *)
       echo "当前内核类型未知，无法确认 Tun 支持等级"
       ;;
@@ -2303,7 +2292,6 @@ write_runtime_kernel_type() {
 runtime_kernel_bin() {
   case "$(runtime_kernel_type)" in
     mihomo) mihomo_bin ;;
-    clash) clash_bin ;;
     *) die "未知内核类型：$(runtime_kernel_type)" ;;
   esac
 }
@@ -2311,7 +2299,6 @@ runtime_kernel_bin() {
 runtime_kernel_name() {
   case "$(runtime_kernel_type)" in
     mihomo) echo "mihomo" ;;
-    clash) echo "clash" ;;
     *) echo "unknown" ;;
   esac
 }

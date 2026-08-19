@@ -87,7 +87,7 @@ write_env_value "KEY" "value"
 - `load_env_if_exists` - Sources .env file
 - `detect_install_scope auto` - Determines system vs user install
 - `ensure_required_commands` - Validates dependencies
-- `resolve_runtime_kernel` - Downloads/installs mihomo or clash
+- `resolve_runtime_kernel` - Downloads/installs mihomo (via pkg)
 - `generate_config` - Builds runtime/config.yaml from subscription
 
 ### Error Handling Pattern
@@ -128,7 +128,7 @@ clashctl config regen              # Rebuild runtime/config.yaml
 
 ### .env Variables (Critical)
 ```bash
-KERNEL_TYPE="mihomo"               # or "clash"
+KERNEL_TYPE="mihomo"
 CLASH_SUBSCRIPTION_URL=""          # Subscription URL
 CLASH_CONTROLLER_SECRET=""         # API secret (auto-generated if empty)
 MIXED_PORT="7890"
@@ -144,7 +144,7 @@ Subscriptions are stored in `runtime/subscriptions.yaml`:
 active: default
 sources:
   default:
-    type: clash           # or "convert" for subconverter
+    type: clash
     url: "https://..."
     enabled: true
 ```
