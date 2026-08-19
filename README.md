@@ -9,12 +9,12 @@ Other languages: [🇨🇳 简体中文](README.zh.md)
 
 ## ✨ Core Features
 
-- Automatic architecture detection and runtime dependency downloading
-- Multi-subscription management and node switching
-- Tun mode and route diagnostics
+- mihomo kernel installed via `pkg` (version tracks the pkg repository)
+- Multi-subscription management and node switching (clash format only)
 - Mixin patch mechanism
 - One-click diagnostics with `clashctl doctor`
 - FreeBSD `rc.d` service management (`freebsd-rc` backend)
+- zashboard Web panel auto-download and deploy (visit `http://<ip>:9090/ui`)
 - **Download integrity verification** with SHA256 checksums
 
 ## ⌨️ Command Overview
@@ -23,7 +23,6 @@ Other languages: [🇨🇳 简体中文](README.zh.md)
 clashon / clashoff
 clashctl add|use|select|ls
 clashctl status|doctor|logs
-clashctl tun on|off|doctor
 clashctl autostart on|off|status
 clashctl config regen
 clashctl update|upgrade
@@ -98,7 +97,7 @@ override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
 Cause: Running `sudo clashctl ...` writes `.env` or `runtime/*` with `root` ownership, causing permission issues for subsequent non-root execution.
 
 Recommendations:
-- Use `sudo` only for commands that require root (e.g., `service`, `autostart`, `tun on/off`).
+- Use `sudo` only for commands that require root (e.g., `service`, `autostart`).
 - Prefer non-root execution for other commands (e.g., `clashctl config regen`, `clashctl secret`, `clashctl logs`).
 
 Fix ownership (one-time):
@@ -151,23 +150,16 @@ Notes:
 - `service` and `autostart` commands require root privileges (use root or `sudo`).
 - FreeBSD auto-start config file: `/etc/rc.conf.d/clash_freebsd`.
 
-## 4. Tun and Route Diagnostics (FreeBSD)
+## 4. TUN Mode (Not Supported on FreeBSD)
 
-Tun devices are typically located at `/dev/tun*`.
+The current mihomo kernel does not support TUN on FreeBSD; `clashctl tun on` will fail with an explicit message.
+
+Route diagnostics still work:
 
 ```sh
-sudo clashctl tun on
-sudo clashctl tun off
-clashctl tun doctor
 route -n get default
 netstat -rn -f inet
 ```
-
-If Tun is not working, check the following first:
-- `tun on/off` requires root privileges (use root or `sudo`).
-- `ls -l /dev/tun*`
-- Current user permissions (root recommended)
-- Whether the default route has been taken over by the tun interface
 
 ## 5. Common Troubleshooting Commands
 
@@ -333,7 +325,6 @@ After maintenance is complete, immediately revert to intranet mode and tighten s
 ## 🔗 References
 
 - [mihomo](https://github.com/MetaCubeX/mihomo)
-- [subconverter](https://github.com/tindy2013/subconverter)
 - [zashboard](https://github.com/Zephyruso/zashboard)
 
 ## ⚠️ Disclaimer

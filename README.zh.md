@@ -5,12 +5,12 @@
 
 ## ✨ 核心特性
 
-- 自动识别架构并下载对应运行依赖
-- 多订阅管理与节点切换
-- Tun 模式与路由诊断
+- mihomo 内核通过 `pkg` 安装，版本以 pkg 仓库为准（自动保持最新）
+- 多订阅管理与节点切换（仅支持 clash 格式订阅）
 - Mixin 补丁机制
 - `clashctl doctor` 一键诊断
 - FreeBSD `rc.d` 服务托管（`freebsd-rc` 后端）
+- zashboard Web 面板自动下载部署（访问 `http://<ip>:9090/ui`）
 - **下载完整性验证**：SHA256 校验和验证
 
 ## ⌨️ 命令一览
@@ -19,7 +19,6 @@
 clashon / clashoff
 clashctl add|use|select|ls
 clashctl status|doctor|logs
-clashctl tun on|off|doctor
 clashctl autostart on|off|status
 clashctl config regen
 clashctl update|upgrade
@@ -94,7 +93,7 @@ override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
 原因：使用 `sudo clashctl ...` 执行会把 `.env` 或 `runtime/*` 写成 `root` 属主，后续普通用户执行会权限不足。
 
 建议：
-- 仅对必须 root 的命令使用 `sudo`（如 `service`、`autostart`、`tun on/off`）。
+- 仅对必须 root 的命令使用 `sudo`（如 `service`、`autostart`）。
 - 其他命令（如 `clashctl config regen`、`clashctl secret`、`clashctl logs`）优先使用普通用户执行。
 
 修复属主（一次性）：
@@ -147,23 +146,16 @@ sudo clashctl autostart off
 - `service` 与 `autostart` 命令需要 root 权限（请使用 root 或 `sudo`）。
 - FreeBSD 自启配置文件：`/etc/rc.conf.d/clash_freebsd`。
 
-## 4. Tun 与路由诊断（FreeBSD）
+## 4. TUN 模式（FreeBSD 不支持）
 
-Tun 设备通常为 `/dev/tun*`。
+当前 mihomo 内核在 FreeBSD 上不支持 TUN 功能，`clashctl tun on` 会直接报错并提示原因。
+
+路由诊断命令仍可使用：
 
 ```sh
-sudo clashctl tun on
-sudo clashctl tun off
-clashctl tun doctor
 route -n get default
 netstat -rn -f inet
 ```
-
-Tun 未生效时优先检查：
-- `tun on/off` 需要 root 权限（请使用 root 或 `sudo`）。
-- `ls -l /dev/tun*`
-- 当前用户权限（建议 root）
-- 默认路由是否已接管到 tun 接口
 
 ## 5. 常用排障命令
 
@@ -329,7 +321,6 @@ clashoff && clashon
 ## 🔗 引用
 
 - [mihomo](https://github.com/MetaCubeX/mihomo)
-- [subconverter](https://github.com/tindy2013/subconverter)
 - [zashboard](https://github.com/Zephyruso/zashboard)
 
 ## ⚠️ 特别声明
