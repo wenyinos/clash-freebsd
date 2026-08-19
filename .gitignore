@@ -2,8 +2,6 @@
 .idea/
 .vscode/
 
-# Local env
-.env
 
 # Runtime
 runtime/
@@ -18,3 +16,6 @@ resources/dashboard/dist/
 test.sh
 .codex
 CODE_REVIEW_REPORT.md
+
+# zashboard 下载缓存（install 时自动下载）
+resources/dashboard/dist-no-fonts.zip

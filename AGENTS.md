@@ -6,6 +6,8 @@ This is a **bash-based deployment and management tool** for Clash/Mihomo proxy o
 
 **Key insight**: There are no unit tests, no package manager, no build system. The "build" is the shell script execution itself.
 
+**Platform**: FreeBSD only.
+
 ## Architecture
 
 ### Directory Structure
@@ -46,6 +48,10 @@ This is a **bash-based deployment and management tool** for Clash/Mihomo proxy o
 - `runtime/install.env` - Installation metadata
 - `runtime/build.env` - Build status tracking
 - `runtime/tun.env` - TUN mode state
+- `runtime/runtime-events.env` - Event markers (`read/write_runtime_event_value`, e.g. `RUNTIME_LAST_BUILD_APPLIED`)
+- `runtime/sub-health.env` - Subscription health state
+- `runtime/checksums.env` - Download SHA256 records
+- `runtime/cache/assets/` - Download cache
 
 ### FreeBSD-Specifics
 - Service name: `clash_freebsd`
@@ -56,9 +62,9 @@ This is a **bash-based deployment and management tool** for Clash/Mihomo proxy o
 ## Development Guidelines
 
 ### Working with Scripts
-1. **All scripts use `set -euo pipefail`** - strict error handling
+1. **Entry scripts** (`install.sh`, `uninstall.sh`, `clashctl.sh`) use `set -euo pipefail`; **sourced library scripts** (e.g. `common.sh`) use only `set -u` — adding `set -e` to a sourced file hijacks the caller's error handling
 2. **Always source dependencies**: `source "$PROJECT_DIR/scripts/core/common.sh"`
-3. **Use `yq` for YAML manipulation** - never raw sed/awk on YAML
+3. **Use `yq` for YAML manipulation** - never raw sed/awk on YAML. In code, always call `"$(yq_bin)"` (`$RUNTIME_DIR/bin/yq`), not system `yq`
 4. **Logging functions**: `log()`, `info()`, `success()`, `warn()`, `error()`, `die()`
 
 ### State Management Pattern
@@ -175,9 +181,11 @@ mihomo -t -f runtime/config.yaml -d runtime/
 ```
 
 ### Text Encoding Check (CI)
+Runs on every PR and push to main/master:
 ```bash
-bash .github/scripts/check-text-encoding.sh
+bash .github/scripts/check-text-encoding.sh   # or: bash scripts/dev/check-text-encoding.sh (wrapper)
 ```
+Fails on: mojibake characters (double-encoded CJK) in `scripts/`, UTF-8 BOM, or invalid UTF-8 in `scripts/**/*.sh`. All `.sh`/`.yaml` files must be UTF-8 with LF endings (enforced by `.gitattributes`).
 
 ## Quirks & Gotchas
 
@@ -234,12 +242,15 @@ If preferred ports are in use, automatically finds alternatives:
 - Deployed to: `runtime/dashboard/`
 - **Blocks install if missing** (not optional)
 
+### 9. `.env` Is Git-Tracked
+`.env` ships default config (no secrets) and is intentionally tracked; the `.gitignore` entry is vestigial. Local edits to it will show in `git status` — that's expected.
+
 ## File Editing Guidelines
 
 ### DO
 - Use `yq` for YAML modifications
 - Follow existing logging patterns (`info`, `warn`, `die`)
-- Preserve `set -euo pipefail` in all scripts
+- Use `set -euo pipefail` in entry scripts, only `set -u` in sourced library scripts
 - Use `write_env_value` / `read_env_value` for .env
 - Use `write_runtime_value` / `read_runtime_value` for runtime state
 
