@@ -137,10 +137,11 @@ freebsd_service_autostart_preference_enabled() {
           return 1
           ;;
       esac
+      return 0
       ;;
   esac
 
-  return 0
+  return 1
 }
 
 freebsd_service_autostart_enable() {
@@ -161,13 +162,14 @@ freebsd_service_autostart_status() {
   local file value
   file="$(freebsd_rc_conf_file)"
 
-  [ -f "$file" ] || {
-    echo "off"
-    return 0
-  }
+  if [ -f "$file" ]; then
+    value="$(sed -nE "s/^[[:space:]]*$(freebsd_service_name)_enable=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1 | tr '[:upper:]' '[:lower:]')"
+  fi
 
-  value="$(sed -nE "s/^[[:space:]]*$(freebsd_service_name)_enable=['\"]?([^'\"]*)['\"]?$/\1/p" "$file" | head -n 1 | tr '[:upper:]' '[:lower:]')"
-  case "$value" in
+  # rc.conf.d 未覆盖时回退读取 /etc/rc.conf（用户可能用 sysrc 写入）
+  [ -n "${value:-}" ] || value="$(sysrc -n "$(freebsd_service_name)_enable" 2>/dev/null | tr '[:upper:]' '[:lower:]' || true)"
+
+  case "${value:-}" in
     yes|true|1|on)
       echo "on"
       ;;

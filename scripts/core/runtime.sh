@@ -70,78 +70,25 @@ resolve_yq() {
 }
 
 resolve_mihomo() {
-  local arch os version file url tmp_file url_base custom_url downloaded
-  local candidates checksum_key
-
-  arch="$(get_arch)"
-  os="$(get_os)"
-  version="${MIHOMO_VERSION:-$DEFAULT_MIHOMO_VERSION}"
-  url_base="${MIHOMO_DOWNLOAD_BASE:-https://github.com/MetaCubeX/mihomo/releases/download}"
-  custom_url="${MIHOMO_DOWNLOAD_URL:-}"
+  # 检测旧版手动下载（GitHub）残留的 mihomo 二进制，提示卸载
+  if [ -f "$BIN_DIR/mihomo" ]; then
+    ui_warn "检测到旧版手动下载的 mihomo 二进制：$BIN_DIR/mihomo（新版已改为 pkg 管理）"
+    ui_warn "请删除该文件，避免与 pkg 安装的 mihomo 混淆：rm -f \"$BIN_DIR/mihomo\""
+  fi
 
   if [ -x "$(mihomo_bin)" ]; then
     return 0
   fi
 
-  case "$os:$arch" in
-    linux:amd64)
-      candidates="mihomo-linux-amd64-compatible-${version}.gz"
-      ;;
-    linux:arm64)
-      candidates="mihomo-linux-arm64-${version}.gz"
-      ;;
-    linux:armv7)
-      candidates="mihomo-linux-armv7-${version}.gz"
-      ;;
-    freebsd:amd64)
-      candidates="
-mihomo-freebsd-amd64-compatible-${version}.gz
-mihomo-freebsd-amd64-v1-${version}.gz
-mihomo-freebsd-amd64-${version}.gz
-"
-      ;;
-    freebsd:arm64)
-      candidates="
-mihomo-freebsd-arm64-${version}.gz
-mihomo-freebsd-arm64-v8-${version}.gz
-"
-      ;;
-    *)
-      die "暂不支持的 Mihomo 目标：${os}/${arch}"
-      ;;
-  esac
-
-  tmp_file="$(mktemp)"
-  trap 'rm -f "'"${tmp_file}"'" 2>/dev/null || true' EXIT
-
-  if [ -n "${custom_url:-}" ]; then
-    url="$custom_url"
-    checksum_key="MIHOMO_CUSTOM_${version}"
-    if ! copy_bundled_asset "mihomo" "$version" "${url##*/}" "$tmp_file" "mihomo"; then
-      download_file "$url" "$tmp_file" "mihomo（可在 .env 中设置 MIHOMO_DOWNLOAD_BASE / MIHOMO_DOWNLOAD_URL）" "$checksum_key"
-    fi
-  else
-    downloaded="false"
-    for file in $candidates; do
-      url="${url_base%/}/${version}/${file}"
-      checksum_key="MIHOMO_${version}_${file%.gz}"
-      if copy_bundled_asset "mihomo" "$version" "$file" "$tmp_file" "mihomo" \
-        || download_file "$url" "$tmp_file" "mihomo" "$checksum_key"; then
-        downloaded="true"
-        break
-      fi
-    done
-
-    [ "$downloaded" = "true" ] || {
-      rm -f "$tmp_file"
-      die "Mihomo 下载失败：未找到 ${os}/${arch} 可用资产（版本：$version）"
-    }
+  if ! is_root_user; then
+    die_state "FreeBSD 通过 pkg 安装 mihomo 需要 root 权限" \
+              "请通过 root 用户或 sudo 重新运行（或手动执行：pkg install -y mihomo）"
   fi
 
-  gzip -dc "$tmp_file" > "$(mihomo_bin)"
-  chmod +x "$(mihomo_bin)"
-  rm -f "$tmp_file"
-  trap - EXIT
+  info "FreeBSD 使用 pkg 安装 mihomo（版本以 pkg 仓库为准）"
+  pkg install -y mihomo || die_state "pkg install mihomo 失败" \
+            "请检查 pkg 源配置与网络（可先执行 pkg update）"
+  [ -x "$(mihomo_bin)" ] || die "pkg 安装后 mihomo 仍不可执行：$(mihomo_bin)"
 }
 
 resolve_clash() {
@@ -221,7 +168,7 @@ resolve_runtime_kernel() {
     mihomo)
       resolve_mihomo
       write_runtime_value "KERNEL_TYPE_INSTALLED" "mihomo"
-      write_runtime_value "MIHOMO_VERSION_INSTALLED" "${MIHOMO_VERSION:-$DEFAULT_MIHOMO_VERSION}"
+      write_runtime_value "MIHOMO_VERSION_INSTALLED" "pkg-managed"
       ;;
     clash)
       resolve_clash
@@ -232,152 +179,6 @@ resolve_runtime_kernel() {
   esac
 }
 
-subconverter_version_file_value() {
-  read_runtime_value "SUBCONVERTER_VERSION_INSTALLED" 2>/dev/null || true
-}
-
-mark_subconverter_version_installed() {
-  local version="$1"
-  write_runtime_value "SUBCONVERTER_VERSION_INSTALLED" "$version"
-}
-
-detect_subconverter_package_type() {
-  local file="$1"
-  local desc magic
-
-  if tar -tzf "$file" >/dev/null 2>&1; then
-    echo "tar.gz"
-    return 0
-  fi
-
-  magic="$(od -An -tx1 -N4 "$file" 2>/dev/null | tr -d '[:space:]' || true)"
-
-  case "$magic" in
-    504b0304|504b0506|504b0708)
-      echo "zip"
-      return 0
-      ;;
-    7f454c46)
-      echo "binary"
-      return 0
-      ;;
-  esac
-
-  if command -v unzip >/dev/null 2>&1 && unzip -tq "$file" >/dev/null 2>&1; then
-    echo "zip"
-    return 0
-  fi
-
-  desc="$(file -b "$file" 2>/dev/null || true)"
-  case "$desc" in
-    *ELF*|*executable*)
-      echo "binary"
-      return 0
-      ;;
-  esac
-
-  echo "unknown"
-}
-
-find_subconverter_binary() {
-  local search_dir="$1"
-  local found
-
-  found="$(find "$search_dir" \( -type f -o -type l \) -name subconverter -print 2>/dev/null | head -n 1)"
-  [ -n "${found:-}" ] || return 1
-  echo "$found"
-}
-
-subconverter_runtime_layout_ready() {
-  local target_dir="$1"
-
-  [ -d "$target_dir" ] || return 1
-  [ -d "$target_dir/templates" ] \
-    || [ -d "$target_dir/base" ] \
-    || [ -d "$target_dir/config" ] \
-    || [ -d "$target_dir/rules" ]
-}
-
-resolve_subconverter() {
-  local arch version file url tmp_dir tmp_file target_dir installed_version
-  local extract_dir package_type found_bin target_bin source_dir
-
-  arch="$(get_arch)"
-  version="${SUBCONVERTER_VERSION:-$DEFAULT_SUBCONVERTER_VERSION}"
-  target_dir="$(subconverter_home)"
-  target_bin="$(subconverter_bin)"
-  installed_version="$(subconverter_version_file_value)"
-
-  if [ -f "$target_bin" ] && [ "$installed_version" = "$version" ]; then
-    chmod +x "$target_bin" 2>/dev/null || true
-    if [ -x "$target_bin" ] && subconverter_runtime_layout_ready "$target_dir"; then
-      return 0
-    fi
-  fi
-
-  case "$arch" in
-    amd64) file="subconverter_linux64.tar.gz" ;;
-    arm64) file="subconverter_aarch64.tar.gz" ;;
-    armv7) file="subconverter_armv7.tar.gz" ;;
-    *) die "暂不支持的 subconverter 架构：$arch" ;;
-  esac
-
-  url="https://github.com/tindy2013/subconverter/releases/download/${version}/${file}"
-  tmp_dir="$(mktemp -d)"
-  tmp_file="$tmp_dir/$file"
-  extract_dir="$tmp_dir/extract"
-
-  if ! copy_bundled_asset "subconverter" "$version" "$file" "$tmp_file" "subconverter"; then
-    download_file "$url" "$tmp_file" "subconverter"
-  fi
-
-  package_type="$(detect_subconverter_package_type "$tmp_file")"
-
-  rm -rf "$target_dir"
-  mkdir -p "$target_dir" "$extract_dir"
-
-  case "$package_type" in
-    tar.gz)
-      tar -xzf "$tmp_file" -C "$extract_dir"
-      found_bin="$(find_subconverter_binary "$extract_dir" 2>/dev/null || true)"
-      ;;
-    zip)
-      command -v unzip >/dev/null 2>&1 || die "解压 subconverter zip 失败：系统缺少 unzip"
-      unzip -oq "$tmp_file" -d "$extract_dir"
-      found_bin="$(find_subconverter_binary "$extract_dir" 2>/dev/null || true)"
-      ;;
-    binary)
-      found_bin="$tmp_file"
-      ;;
-    *)
-      if command -v file >/dev/null 2>&1; then
-        file "$tmp_file" >&2 || true
-      fi
-      die "subconverter 下载内容异常：无法识别下载包类型（文件：$tmp_file）"
-      ;;
-  esac
-
-  [ -n "${found_bin:-}" ] && [ -f "$found_bin" ] || {
-    find "$extract_dir" -maxdepth 3 \( -type f -o -type l \) 2>/dev/null | sed 's/^/  /' >&2 || true
-    die "解压后未找到 subconverter 文件"
-  }
-
-  if [ "$package_type" = "binary" ]; then
-    cp -f "$found_bin" "$target_bin"
-  else
-    source_dir="$(dirname "$found_bin")"
-    cp -a "$source_dir"/. "$target_dir"/
-  fi
-  chmod +x "$target_bin"
-
-  [ -x "$target_bin" ] || {
-    rm -rf "$tmp_dir"
-    die "subconverter 文件不可执行：$target_bin"
-  }
-
-  mark_subconverter_version_installed "$version"
-  rm -rf "$tmp_dir"
-}
 
 ensure_runtime_config_ready() {
   local config_file last_file now reason
@@ -653,7 +454,6 @@ runtime_status_text() {
 }
 
 clean_runtime_state() {
-  stop_subconverter || true
   stop_runtime || true
   clear_build_meta || true
   clear_runtime_event_file || true

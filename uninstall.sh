@@ -36,6 +36,15 @@ init_project_context "$PROJECT_DIR"
 load_env_if_exists
 detect_install_scope auto
 
+# FreeBSD rc.d 后端下，service_stop / remove_runtime_entry 内部会 die（exit 1），
+# `|| true` 无法兜住 exit；提前检查 root，避免卸载中途静默中止、清理项被跳过。
+if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] \
+  && [ "$(runtime_backend 2>/dev/null || echo script)" = "freebsd-rc" ] \
+  && ! is_root_user; then
+  die_state "FreeBSD rc.d 模式卸载需要 root 权限，当前为普通用户" \
+            "请通过 root 用户或 sudo 重新运行 uninstall.sh"
+fi
+
 service_stop || true
 remove_runtime_entry || true
 remove_clashctl_entry || true

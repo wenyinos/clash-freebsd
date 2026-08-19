@@ -12,9 +12,7 @@ set -u  # 未定义变量报错，有助于捕获拼写错误
 : "${CONFIG_DIR:=}"
 : "${RESOURCE_DIR:=}"
 
-DEFAULT_MIHOMO_VERSION="${MIHOMO_VERSION:-v1.19.23}"
 DEFAULT_CLASH_VERSION="${CLASH_VERSION:-v1.18.0}"
-DEFAULT_SUBCONVERTER_VERSION="${SUBCONVERTER_VERSION:-v0.9.0}"
 DEFAULT_YQ_VERSION="${YQ_VERSION:-v4.52.4}"
 
 log()      { printf '%s\n' "$*"; }
@@ -306,16 +304,8 @@ normalize_env_compat() {
     CLASH_SUBSCRIPTION_URL="$CLASH_CONFIG_URL"
   fi
 
-  if [ -n "${VERSION_MIHOMO:-}" ]; then
-    MIHOMO_VERSION="$VERSION_MIHOMO"
-  fi
-
   if [ -n "${VERSION_YQ:-}" ]; then
     YQ_VERSION="$VERSION_YQ"
-  fi
-
-  if [ -n "${VERSION_SUBCONVERTER:-}" ]; then
-    SUBCONVERTER_VERSION="$VERSION_SUBCONVERTER"
   fi
 
   if [ -n "${URL_CLASH_UI:-}" ]; then
@@ -597,9 +587,8 @@ github_url_is_mirrorable() {
 
 default_github_mirror_pool() {
   cat <<'EOF'
-gh-proxy|https://gh-proxy.org|full
-ghfast|https://ghfast.top|hostpath
 ghproxy-net|https://ghproxy.net|hostpath
+git-951|https://git.951959483.xyz|hostpath
 EOF
 }
 
@@ -1156,7 +1145,7 @@ ensure_openwrt_install_supported() {
       ;;
     *)
       die_state "OpenWrt 脚本模式暂只支持 x86_64/amd64 与 aarch64/arm64，当前架构：$arch" \
-                "如需 MIPS/armv7，请先确认 mihomo/clash、yq 与 subconverter 都有可用二进制"
+                "如需 MIPS/armv7，请先确认 mihomo/clash、yq 都有可用二进制"
       ;;
   esac
 
@@ -1235,7 +1224,7 @@ ensure_required_commands() {
 }
 
 dashboard_archive_file() {
-  echo "$RESOURCE_DIR/dashboard/dist.zip"
+  echo "$RESOURCE_DIR/dashboard/dist-no-fonts.zip"
 }
 
 dashboard_dir_file() {
@@ -1282,28 +1271,8 @@ dashboard_asset_source() {
 }
 
 ensure_dashboard_deploy_prerequisites() {
-  local archive source_type
-  archive="$(dashboard_archive_file)"
-  source_type="$(dashboard_asset_source)"
-
-  case "$source_type" in
-    dir)
-      return 0
-      ;;
-    zip)
-      command -v unzip >/dev/null 2>&1 || die_state \
-        "检测到 Dashboard 仅可从 dist.zip 部署，但系统缺少 unzip" \
-        "请安装 unzip，或提供 resources/dashboard/dist/index.html（默认策略：本地 Dashboard 资产无效将阻断 install/update）"
-      dashboard_archive_valid || die_state \
-        "Dashboard 压缩包不可用：$archive" \
-        "请修复 dist.zip，或提供 resources/dashboard/dist/index.html（默认策略：本地 Dashboard 资产无效将阻断 install/update）"
-      return 0
-      ;;
-    *)
-      die_state "本地 Dashboard 资产不可用（dist/ 与 dist.zip 均无效）" \
-                "请提供 resources/dashboard/dist/index.html 或可解压的 resources/dashboard/dist.zip（默认策略：本地 Dashboard 资产无效将阻断 install/update）"
-      ;;
-  esac
+  command -v unzip >/dev/null 2>&1 || die_state "部署 zashboard 面板需要 unzip" \
+    "请执行：pkg install -y unzip"
 }
 
 shell_proxy_persist_state_file() {
@@ -1336,59 +1305,37 @@ clear_shell_proxy_persist_state() {
 }
 
 install_local_dashboard_assets() {
-  local archive source_dir target source_type nested_dir
+  local archive target nested_dir
   archive="$(dashboard_archive_file)"
-  source_dir="$(dashboard_dir_file)"
   target="$(runtime_dashboard_dir)"
-  source_type="$(dashboard_asset_source)"
 
   rm -rf "$target" 2>/dev/null || true
   mkdir -p "$target"
 
-  case "$source_type" in
-    dir)
-      cp -a "$source_dir"/. "$target"/ 2>/dev/null || {
-        write_runtime_value "DASHBOARD_ASSET_SOURCE" "dir"
-        write_runtime_value "DASHBOARD_DEPLOY_READY" "false"
-        die "复制 Dashboard 目录失败：$source_dir"
+  # 本地兜底文件优先（用户可手动放置）；否则从 zashboard GitHub releases 下载最新版（走镜像池，可免代理）
+  if [ ! -f "$archive" ]; then
+    download_file "https://github.com/Zephyruso/zashboard/releases/latest/download/dist-no-fonts.zip" \
+      "$archive" "zashboard dist-no-fonts.zip" || {
+        rm -f "$archive" 2>/dev/null || true
+        die_state "zashboard 面板下载失败" \
+                  "请检查网络或镜像可用性；也可手动下载 https://github.com/Zephyruso/zashboard/releases/latest/download/dist-no-fonts.zip 放置到 $archive 后重试"
       }
-      ;;
-    zip)
-      unzip -oq "$archive" -d "$target" || {
-        write_runtime_value "DASHBOARD_ASSET_SOURCE" "zip"
-        write_runtime_value "DASHBOARD_DEPLOY_READY" "false"
-        die "解压 Dashboard 失败：$archive"
-      }
-      ;;
-    *)
-      write_runtime_value "DASHBOARD_ASSET_SOURCE" "none"
-      write_runtime_value "DASHBOARD_DEPLOY_READY" "false"
-      die_state "本地 Dashboard 资产不可用（dist/ 与 dist.zip 均无效）" \
-                "请提供 resources/dashboard/dist/index.html 或可解压的 resources/dashboard/dist.zip"
-      ;;
-  esac
+  fi
+
+  unzip -oq "$archive" -d "$target" || die "解压 zashboard 失败：$archive"
 
   if [ ! -f "$target/index.html" ]; then
     for nested_dir in dist dashboard; do
       if [ -f "$target/$nested_dir/index.html" ]; then
-        cp -a "$target/$nested_dir"/. "$target"/ 2>/dev/null || {
-          write_runtime_value "DASHBOARD_ASSET_SOURCE" "$source_type"
-          write_runtime_value "DASHBOARD_DEPLOY_READY" "false"
-          die "Dashboard 扁平化失败：$target/$nested_dir"
-        }
+        cp -a "$target/$nested_dir"/. "$target"/ 2>/dev/null
         rm -rf "$target/$nested_dir" 2>/dev/null || true
         break
       fi
     done
   fi
 
-  if ! runtime_dashboard_ready; then
-    write_runtime_value "DASHBOARD_ASSET_SOURCE" "$source_type"
-    write_runtime_value "DASHBOARD_DEPLOY_READY" "false"
-    die "Dashboard 部署不完整：缺少 $target/index.html"
-  fi
-
-  write_runtime_value "DASHBOARD_ASSET_SOURCE" "$source_type"
+  [ -f "$target/index.html" ] || die "zashboard 部署不完整：缺少 $target/index.html"
+  write_runtime_value "DASHBOARD_ASSET_SOURCE" "zashboard-release"
   write_runtime_value "DASHBOARD_DEPLOY_READY" "true"
 }
 
@@ -1396,9 +1343,8 @@ get_os() {
   local os
   os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   case "$os" in
-    linux) echo "linux" ;;
     freebsd) echo "freebsd" ;;
-    *) die "暂不支持的操作系统：$os" ;;
+    *) die_state "本项目仅支持 FreeBSD 操作系统" "请使用 FreeBSD 14/15 安装（当前系统：${os:-未知}）" ;;
   esac
 }
 
@@ -1667,6 +1613,12 @@ now_datetime() {
 
 is_port_in_use() {
   local port="$1"
+
+  # FreeBSD 无 ss/netstat -lnt；sockstat 为 base 自带（/usr/sbin/sockstat）
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] && command -v sockstat >/dev/null 2>&1; then
+    sockstat -46 -l -p "$port" 2>/dev/null | grep -q ":$port"
+    return $?
+  fi
 
   if command -v ss >/dev/null 2>&1; then
     ss -lnt 2>/dev/null | awk '{print $4}' | grep -Eq "[:.]${port}$"
@@ -2258,7 +2210,7 @@ yq_bin() {
 }
 
 mihomo_bin() {
-  echo "$BIN_DIR/mihomo"
+  echo "/usr/local/bin/mihomo"
 }
 
 clash_bin() {
@@ -2364,13 +2316,6 @@ runtime_kernel_name() {
   esac
 }
 
-subconverter_home() {
-  echo "$RUNTIME_DIR/subconverter"
-}
-
-subconverter_bin() {
-  echo "$(subconverter_home)/subconverter"
-}
 
 clashctl_source() {
   echo "$PROJECT_DIR/scripts/core/clashctl.sh"

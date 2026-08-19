@@ -162,7 +162,7 @@ ensure_runtime_ports_ready() {
   fi
 
   if [ -n "${controller_port:-}" ] && [ "$controller_port" != "null" ] && is_port_in_use "$controller_port"; then
-    new_controller_port="$(resolve_free_port 9000 9199)"
+    new_controller_port="$(resolve_free_port 9090 9199)"
     write_env_value "EXTERNAL_CONTROLLER" "127.0.0.1:${new_controller_port}"
     write_runtime_value "INSTALL_PLAN_CONTROLLER" "127.0.0.1:${new_controller_port}"
     write_runtime_value "INSTALL_PLAN_CONTROLLER_AUTO_CHANGED" "true"
@@ -172,7 +172,7 @@ ensure_runtime_ports_ready() {
   fi
 
   if [ -n "${dns_port:-}" ] && [ "$dns_port" != "null" ] && is_port_in_use "$dns_port"; then
-    new_dns_port="$(resolve_free_port 1053 1999)"
+    new_dns_port="$(resolve_free_port 1053 1199)"
     write_env_value "CLASH_DNS_PORT" "$new_dns_port"
     write_runtime_value "INSTALL_PLAN_DNS_PORT" "$new_dns_port"
     write_runtime_value "INSTALL_PLAN_DNS_PORT_AUTO_CHANGED" "true"
@@ -1587,6 +1587,11 @@ print_config_kernel_feedback() {
 tun_container_runtime_hint_lines() {
   local env_type os_variant cap_check printed="false"
 
+  if [ "$(get_os 2>/dev/null || true)" = "freebsd" ]; then
+    echo "👉 FreeBSD 请确认 route/netstat 可用，并检查默认路由是否已接管到 tun 接口"
+    return 0
+  fi
+
   env_type="$(container_env_type 2>/dev/null || echo unknown)"
   os_variant="$(install_env_os_variant 2>/dev/null || true)"
   cap_check="$(has_cap_net_admin; echo $?)"
@@ -2878,18 +2883,6 @@ logs_mihomo() {
   tail -n 200 "$LOG_DIR/mihomo.out.log"
 }
 
-logs_subconverter() {
-  local file
-  file="$(subconverter_log_file)"
-
-  if [ ! -f "$file" ]; then
-    echo "subconverter 日志文件不存在"
-    return 0
-  fi
-
-  tail -n 200 "$file"
-}
-
 logs_service() {
   local backend
   backend="$(runtime_backend)"
@@ -2918,14 +2911,11 @@ cmd_logs() {
     mihomo)
       logs_mihomo
       ;;
-    subconverter)
-      logs_subconverter
-      ;;
     service)
       logs_service
       ;;
     *)
-      die "用法：clashctl log|logs [mihomo|subconverter|service]"
+      die "用法：clashctl log|logs [mihomo|service]"
       ;;
   esac
 }
@@ -3048,6 +3038,10 @@ doctor_container_tun() {
     doctor_warn "$(tun_device_path_hint) 不可直接读写"
   fi
 
+  if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
+    doctor_warn "FreeBSD 当前 mihomo 内核不支持 TUN（上游 sing-tun 库无 FreeBSD 实现），设备存在不代表功能可用"
+  fi
+
   case "$(install_env_tun_safe 2>/dev/null || true)" in
     true)
       doctor_ok "安装期判定：Tun 可安全管理"
@@ -3083,8 +3077,7 @@ doctor_dependencies() {
 
   doctor_print_title "依赖检查"
 
-  [ -x "$(mihomo_bin)" ] && doctor_ok "Mihomo 已安装：$(mihomo_bin)" || doctor_fail "Mihomo 缺失：$(mihomo_bin)"
-  [ -x "$(subconverter_bin)" ] && doctor_ok "subconverter 已安装：$(subconverter_bin)" || doctor_fail "subconverter 缺失：$(subconverter_bin)"
+  [ -x "$(mihomo_bin)" ] && doctor_ok "Mihomo 已安装（pkg 管理）：$(mihomo_bin)" || doctor_fail "Mihomo 缺失：请执行 pkg install mihomo"
   [ -x "$(yq_bin)" ] && doctor_ok "yq 已安装：$(yq_bin)" || doctor_fail "yq 缺失：$(yq_bin)"
 
   dashboard_source="$(dashboard_asset_source)"
@@ -3187,7 +3180,7 @@ doctor_config() {
 }
 
 doctor_subscription() {
-  local active file total enabled convert_count auto_disabled_count name
+  local active file total enabled auto_disabled_count name
 
   doctor_print_title "订阅检查"
 
@@ -3208,7 +3201,6 @@ doctor_subscription() {
 
   total="$("$(yq_bin)" eval '.sources | keys | length' "$file" 2>/dev/null || echo 0)"
   enabled="$("$(yq_bin)" eval '[.sources[] | select(.enabled == true)] | length' "$file" 2>/dev/null || echo 0)"
-  convert_count="$("$(yq_bin)" eval '[.sources[] | select(.type == "convert")] | length' "$file" 2>/dev/null || echo 0)"
 
   auto_disabled_count="$(
     while IFS= read -r name; do
@@ -3224,7 +3216,6 @@ doctor_subscription() {
 
   doctor_ok "订阅源总数：$total"
   doctor_ok "已启用订阅源：$enabled"
-  doctor_ok "convert 订阅源：$convert_count"
   doctor_ok "自动禁用订阅源：$auto_disabled_count"
 
   if [ -n "${active:-}" ] && subscription_exists "$active"; then
@@ -3381,13 +3372,6 @@ doctor_ports() {
 
   if ! doctor_yq_available; then
     doctor_warn_skip_yq_parse
-    if [ -x "$(subconverter_bin)" ]; then
-      if is_port_in_use "$(subconverter_port)"; then
-        doctor_ok "subconverter 端口已监听：$(subconverter_port)"
-      else
-        doctor_warn "subconverter 端口未监听：$(subconverter_port)"
-      fi
-    fi
     return 0
   fi
 
@@ -3431,14 +3415,6 @@ doctor_ports() {
     fi
   else
     doctor_warn "无法检查 DNS 端口"
-  fi
-
-  if [ -x "$(subconverter_bin)" ]; then
-    if is_port_in_use "$(subconverter_port)"; then
-      doctor_ok "subconverter 端口已监听：$(subconverter_port)"
-    else
-      doctor_warn "subconverter 端口未监听：$(subconverter_port)"
-    fi
   fi
 }
 
@@ -4627,6 +4603,11 @@ cmd_tun_on() {
 
   prepare
 
+  if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
+    die_state "FreeBSD 当前 mihomo 内核不支持 TUN 功能（上游 sing-tun 库无 FreeBSD 实现）" \
+              "clashctl tun status / tun doctor 可用于查看诊断信息"
+  fi
+
   container_mode="$(tun_container_mode 2>/dev/null || echo unknown)"
   risk_reason="$(tun_container_risk_reason 2>/dev/null || true)"
 
@@ -4751,6 +4732,14 @@ doctor_tun_checks() {
   echo
   echo "🐱 Tun 诊断"
   echo
+
+  if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
+    echo "🚨 FreeBSD 当前 mihomo 内核不支持 TUN 功能（上游 sing-tun 库无 FreeBSD 实现）"
+    echo "📜 设备存在性与内核能力无关：即使检测到 /dev/tun*，mihomo 也无法在 FreeBSD 上创建 TUN 监听"
+    echo "👉 下一步：FreeBSD 上请继续使用常规代理模式，TUN 相关命令不可用"
+    trap - ERR
+    return 0
+  fi
 
   runtime_tun_status="$(tun_runtime_status_text)"
   stack="$(tun_stack)"
@@ -6423,8 +6412,8 @@ cmd_sub() {
       ;;
     set)
       shift || true
-      [ -n "${1:-}" ] || die "用法：clashctl sub set <url> [name]（固定 convert，推荐使用：clashctl add <订阅链接>）"
-      set_subscription "${1:-}" "convert" "${2:-default}"
+      [ -n "${1:-}" ] || die "用法：clashctl sub set <url> [name]（推荐使用：clashctl add <订阅链接>）"
+      set_subscription "${1:-}" "clash" "${2:-default}"
       apply_runtime_change_after_config_mutation
       ;;
     enable)

@@ -75,7 +75,6 @@ sync_runtime_dependencies() {
   ensure_dashboard_deploy_prerequisites
   resolve_yq
   resolve_runtime_kernel
-  resolve_subconverter
   install_local_dashboard_assets
   ensure_controller_secret >/dev/null
 }
@@ -91,7 +90,8 @@ refresh_installed_entry_files() {
 }
 
 remove_mihomo_binary() {
-  rm -f "$(mihomo_bin)" 2>/dev/null || true
+  # FreeBSD 通过 pkg 管理 mihomo，不删除系统二进制
+  return 0
 }
 
 remove_clash_binary() {
@@ -103,7 +103,7 @@ kernel_target_version() {
 
   case "$(normalize_kernel_type "$kernel")" in
     mihomo)
-      echo "${MIHOMO_VERSION:-$DEFAULT_MIHOMO_VERSION}"
+      echo "pkg 仓库最新版"
       ;;
     clash)
       echo "${CLASH_VERSION:-$DEFAULT_CLASH_VERSION}"
@@ -160,9 +160,12 @@ upgrade_runtime_kernel() {
 
   case "$target_kernel" in
     mihomo)
-      info "正在升级 mihomo 内核"
-      remove_mihomo_binary
-      resolve_mihomo
+      if ! is_root_user; then
+        die_state "FreeBSD 通过 pkg 升级 mihomo 需要 root 权限" \
+                  "请通过 root 用户或 sudo 重新运行"
+      fi
+      info "正在通过 pkg 升级 mihomo 内核（版本以 pkg 仓库为准）"
+      pkg upgrade -y mihomo || die "mihomo pkg 升级失败"
       [ -x "$(mihomo_bin)" ] || die "mihomo 内核升级失败"
       ;;
     clash)
