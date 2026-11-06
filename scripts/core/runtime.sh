@@ -82,7 +82,7 @@ resolve_mihomo() {
 
   if ! is_root_user; then
     die_state "FreeBSD 通过 pkg 安装 mihomo 需要 root 权限" \
-              "请通过 root 用户或 sudo 重新运行（或手动执行：pkg install -y mihomo）"
+              "请通过 root 用户（su -）重新运行（或手动执行：pkg install -y mihomo）"
   fi
 
   info "FreeBSD 使用 pkg 安装 mihomo（版本以 pkg 仓库为准）"

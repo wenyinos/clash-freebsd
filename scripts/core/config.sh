@@ -1982,7 +1982,7 @@ apply_runtime_mixin() {
     override_detail="mixin override: ${override_err}"
     if permission_denied_requires_root_or_sudo "$override_err"; then
       override_detail="${override_detail}
-hint: 检测到权限不足，请通过 root 用户或 sudo 重新运行"
+hint: 检测到权限不足，请通过 root 用户（su -）重新运行"
     fi
     write_compile_error_with_detail \
       "其他运行配置 YAML 解析失败：$(display_config_path "$runtime_file")" \

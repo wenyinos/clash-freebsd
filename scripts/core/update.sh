@@ -152,7 +152,7 @@ upgrade_runtime_kernel() {
     mihomo)
       if ! is_root_user; then
         die_state "FreeBSD 通过 pkg 升级 mihomo 需要 root 权限" \
-                  "请通过 root 用户或 sudo 重新运行"
+                  "请通过 root 用户（su -）重新运行"
       fi
       info "正在通过 pkg 升级 mihomo 内核（版本以 pkg 仓库为准）"
       pkg upgrade -y mihomo || die "mihomo pkg 升级失败"

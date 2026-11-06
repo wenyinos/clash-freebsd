@@ -54,7 +54,7 @@ permission_denied_requires_root_or_sudo() {
 permission_denied_hint_if_needed() {
   local text="${1:-}"
   permission_denied_requires_root_or_sudo "$text" || return 0
-  ui_next "检测到权限不足，请通过 root 用户或 sudo 重新运行" >&2
+  ui_next "检测到权限不足，请通过 root 用户（su -）重新运行" >&2
 }
 
 die() {
@@ -1438,14 +1438,14 @@ ensure_kv_file_writable_or_die() {
   local dir
 
   dir="$(dirname "$file")"
-  mkdir -p "$dir" 2>/dev/null || die_state "Permission denied: 无法写入目录 $dir" "请通过 root 用户或 sudo 重新运行"
+  mkdir -p "$dir" 2>/dev/null || die_state "Permission denied: 无法写入目录 $dir" "请通过 root 用户（su -）重新运行"
 
   if [ -f "$file" ]; then
-    [ -w "$file" ] || die_state "Permission denied: $file" "请通过 root 用户或 sudo 重新运行"
+    [ -w "$file" ] || die_state "Permission denied: $file" "请通过 root 用户（su -）重新运行"
     return 0
   fi
 
-  touch "$file" 2>/dev/null || die_state "Permission denied: 无法创建文件 $file" "请通过 root 用户或 sudo 重新运行"
+  touch "$file" 2>/dev/null || die_state "Permission denied: 无法创建文件 $file" "请通过 root 用户（su -）重新运行"
 }
 
 kv_read() {
@@ -2551,19 +2551,14 @@ remove_clashctl_entry() {
 }
 
 remove_shell_alias_entry() {
-  local profile_file
+  local profile_file shell_rc
   profile_file="$(profile_entry_file)"
   rm -f "$profile_file" 2>/dev/null || true
 
-  if [ "$INSTALL_SCOPE" = "user" ]; then
-    local shell_rc
-    for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
-      [ -f "$shell_rc" ] || continue
-      awk -v profile="$profile_file" '
-        index($0, profile) == 0 { print }
-      ' "$shell_rc" > "${shell_rc}.tmp" && mv "${shell_rc}.tmp" "$shell_rc"
-    done
-  fi
+  # 安装时无条件向当前用户 shell rc 写入 source 块，卸载时也需无条件清理
+  for shell_rc in "$HOME/.bashrc" "$HOME/.zshrc" "$HOME/.profile"; do
+    remove_rc_source_block "$shell_rc"
+  done
 }
 
 remove_clashctl_completion() {

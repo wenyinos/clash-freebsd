@@ -235,13 +235,11 @@ service_is_running() {
   backend="$(runtime_backend)"
 
   case "$backend" in
-    freebsd-rc)
-      service "$(freebsd_service_name)" onestatus >/dev/null 2>&1
-      ;;
-    script)
+    freebsd-rc|script)
+      # 普通用户无法对 root 进程执行 kill -0（EPERM），改用 pidfile + ps 判断
       if [ -f "$RUNTIME_DIR/mihomo.pid" ]; then
         pid="$(cat "$RUNTIME_DIR/mihomo.pid" 2>/dev/null || true)"
-        [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null
+        [ -n "${pid:-}" ] && ps -p "$pid" >/dev/null 2>&1
       else
         return 1
       fi

@@ -42,7 +42,7 @@ if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] \
   && [ "$(runtime_backend 2>/dev/null || echo script)" = "freebsd-rc" ] \
   && ! is_root_user; then
   die_state "FreeBSD rc.d 模式卸载需要 root 权限，当前为普通用户" \
-            "请通过 root 用户或 sudo 重新运行 uninstall.sh"
+            "请通过 root 用户（su -）重新运行 uninstall.sh"
 fi
 
 service_stop || true

@@ -15,7 +15,7 @@ freebsd_rc_conf_file() {
 }
 
 freebsd_require_root() {
-  is_root_user || die_state "FreeBSD rc.d 模式需要 root 权限" "请通过 root 用户或 sudo 重新运行"
+  is_root_user || die_state "FreeBSD rc.d 模式需要 root 权限" "请切换到 root 用户（su -）后重新运行"
 }
 
 write_freebsd_autostart_value() {
@@ -41,6 +41,10 @@ install_freebsd_entry() {
 #
 
 . /etc/rc.subr
+
+# rc.d 默认 PATH 不含 /usr/local/bin，而 curl/yq 等依赖安装在该目录
+PATH="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin"
+export PATH
 
 name="$(freebsd_service_name)"
 rcvar="\${name}_enable"
@@ -70,7 +74,7 @@ $(freebsd_service_name)_restart() {
 $(freebsd_service_name)_status() {
   if [ -f "\${pidfile}" ]; then
     pid=\$(cat "\${pidfile}" 2>/dev/null || true)
-    if [ -n "\${pid}" ] && kill -0 "\${pid}" 2>/dev/null; then
+    if [ -n "\${pid}" ] && ps -p "\${pid}" >/dev/null 2>&1; then
       echo "\${name} is running (pid: \${pid})"
       return 0
     fi
@@ -116,17 +120,18 @@ remove_freebsd_entry() {
 
 freebsd_service_start() {
   freebsd_require_root
-  service "$(freebsd_service_name)" start
+  # autostart 为 NO 时 service start 会被 rc.subr 拒绝，必须使用 onestart
+  service "$(freebsd_service_name)" onestart
 }
 
 freebsd_service_stop() {
   freebsd_require_root
-  service "$(freebsd_service_name)" stop >/dev/null 2>&1 || true
+  service "$(freebsd_service_name)" onestop >/dev/null 2>&1 || true
 }
 
 freebsd_service_restart() {
   freebsd_require_root
-  service "$(freebsd_service_name)" restart
+  service "$(freebsd_service_name)" onerestart
 }
 
 freebsd_service_autostart_preference_enabled() {
@@ -181,12 +186,11 @@ freebsd_service_autostart_status() {
 
 freebsd_service_status_text() {
   local pid
-  if service "$(freebsd_service_name)" onestatus >/dev/null 2>&1; then
+  # 普通用户无法对 root 进程执行 kill -0（EPERM），改用 pidfile + ps 判断
+  pid="$(cat "$RUNTIME_DIR/mihomo.pid" 2>/dev/null || true)"
+  if [ -n "${pid:-}" ] && ps -p "$pid" >/dev/null 2>&1; then
     echo "运行中"
-    if [ -f "$RUNTIME_DIR/mihomo.pid" ]; then
-      pid="$(cat "$RUNTIME_DIR/mihomo.pid" 2>/dev/null || true)"
-      [ -n "${pid:-}" ] && echo "进程号：$pid"
-    fi
+    echo "进程号：$pid"
   else
     echo "未运行"
   fi

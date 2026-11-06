@@ -2168,6 +2168,7 @@ status_runtime_backend_text() {
   [ -n "${backend:-}" ] || backend="$(install_plan_backend 2>/dev/null || true)"
 
   case "${backend:-unknown}" in
+    freebsd-rc) echo "freebsd-rc" ;;
     systemd) echo "systemd" ;;
     systemd-user) echo "systemd-user" ;;
     script) echo "script" ;;
@@ -2182,6 +2183,9 @@ status_runtime_backend_reason_text() {
   container_type="$(install_env_container 2>/dev/null || echo unknown)"
 
   case "$backend" in
+    freebsd-rc)
+      echo "root + FreeBSD rc.d 可用"
+      ;;
     systemd)
       echo "root + systemd 可用"
       ;;
@@ -2327,7 +2331,7 @@ print_status_summary_compact() {
   fi
   dashboard_source_text="$(read_runtime_value "DASHBOARD_ASSET_SOURCE" 2>/dev/null || echo none)"
   case "${dashboard_source_text:-none}" in
-    dir|zip|none) ;;
+    dir|zip|zashboard-release|none) ;;
     *) dashboard_source_text="none" ;;
   esac
   if [ "$dashboard_source_text" = "none" ]; then
@@ -2482,7 +2486,7 @@ print_status_summary_verbose() {
   fi
   dashboard_source_text="$(read_runtime_value "DASHBOARD_ASSET_SOURCE" 2>/dev/null || echo none)"
   case "${dashboard_source_text:-none}" in
-    dir|zip|none) ;;
+    dir|zip|zashboard-release|none) ;;
     *) dashboard_source_text="none" ;;
   esac
   if [ "$dashboard_source_text" = "none" ]; then
@@ -3008,6 +3012,9 @@ doctor_container_tun() {
   esac
 
   case "$(runtime_backend 2>/dev/null || echo unknown)" in
+    freebsd-rc)
+      doctor_ok "当前运行后端：freebsd-rc"
+      ;;
     systemd)
       doctor_ok "当前运行后端：systemd"
       ;;
@@ -3159,7 +3166,7 @@ doctor_config() {
   external_ui_path="$("$(yq_bin)" eval '.["external-ui"] // ""' "$config_file" 2>/dev/null | head -n 1)"
   dashboard_source="$(read_runtime_value "DASHBOARD_ASSET_SOURCE" 2>/dev/null || echo none)"
   case "${dashboard_source:-none}" in
-    dir|zip|none) ;;
+    dir|zip|zashboard-release|none) ;;
     *) dashboard_source="none" ;;
   esac
   if [ -n "${external_ui_path:-}" ] && [ "$external_ui_path" != "null" ] && [ -f "${external_ui_path%/}/index.html" ]; then
@@ -3334,11 +3341,25 @@ doctor_service() {
         doctor_warn "用户级 systemd 服务未运行"
       fi
       ;;
+    freebsd-rc)
+      if [ -f "$RUNTIME_DIR/mihomo.pid" ]; then
+        local pid
+        pid="$(cat "$RUNTIME_DIR/mihomo.pid" 2>/dev/null || true)"
+        if [ -n "${pid:-}" ] && ps -p "$pid" >/dev/null 2>&1; then
+          doctor_ok "FreeBSD rc.d 服务运行中"
+          echo "    进程号：$pid"
+        else
+          doctor_warn "FreeBSD rc.d PID 文件存在，但进程未运行"
+        fi
+      else
+        doctor_warn "FreeBSD rc.d 当前未运行"
+      fi
+      ;;
     script)
       if [ -f "$RUNTIME_DIR/mihomo.pid" ]; then
         local pid
         pid="$(cat "$RUNTIME_DIR/mihomo.pid" 2>/dev/null || true)"
-        if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
+        if [ -n "${pid:-}" ] && ps -p "$pid" >/dev/null 2>&1; then
           doctor_ok "脚本模式进程运行中"
           echo "    进程号：$pid"
         else
@@ -3472,7 +3493,7 @@ doctor_runtime_events() {
   fi
   dashboard_source="$(read_runtime_value "DASHBOARD_ASSET_SOURCE" 2>/dev/null || echo none)"
   case "${dashboard_source:-none}" in
-    dir|zip|none) ;;
+    dir|zip|zashboard-release|none) ;;
     *) dashboard_source="none" ;;
   esac
   if [ -n "$(read_env_value "CLASH_CONTROLLER_SECRET" 2>/dev/null || true)" ]; then
@@ -6197,6 +6218,23 @@ cmd_health() {
 
   ui_info "订阅健康已收敛到 clashctl ls"
   cmd_ls
+}
+
+proxy_select_direct() {
+  local group="${1:-}"
+  local node="${2:-}"
+
+  [ -n "${group:-}" ] || die "用法：clashctl select <策略组> <节点>"
+
+  if [ -z "${node:-}" ]; then
+    proxy_select_interactive_guarded "$group"
+    return 0
+  fi
+
+  ensure_runtime_ready
+
+  proxy_group_select "$group" "$node"
+  print_select_feedback "$group"
 }
 
 cmd_select() {
