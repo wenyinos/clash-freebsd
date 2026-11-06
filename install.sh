@@ -9,6 +9,7 @@ source "$PROJECT_DIR/scripts/core/runtime.sh"
 source "$PROJECT_DIR/scripts/core/config.sh"
 source "$PROJECT_DIR/scripts/init/freebsd.sh"
 source "$PROJECT_DIR/scripts/init/script.sh"
+source "$PROJECT_DIR/scripts/core/tun_freebsd.sh"
 
 init_project_context "$PROJECT_DIR"
 load_env_if_exists
@@ -21,6 +22,7 @@ init_layout
 ensure_dashboard_deploy_prerequisites
 
 resolve_runtime_kernel
+resolve_tun2socks
 resolve_yq
 
 mark_install_environment || true

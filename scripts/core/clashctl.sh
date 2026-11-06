@@ -18,6 +18,7 @@ source "$PROJECT_DIR/scripts/core/proxy.sh"
 source "$PROJECT_DIR/scripts/core/update.sh"
 source "$PROJECT_DIR/scripts/init/freebsd.sh"
 source "$PROJECT_DIR/scripts/init/script.sh"
+source "$PROJECT_DIR/scripts/core/tun_freebsd.sh"
 
 usage() {
   cat <<EOF
@@ -3042,7 +3043,11 @@ doctor_container_tun() {
   fi
 
   if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
-    doctor_warn "FreeBSD 当前 mihomo 内核不支持 TUN（上游 sing-tun 库无 FreeBSD 实现），设备存在不代表功能可用"
+    if tun_freebsd_available; then
+      doctor_ok "FreeBSD TUN 后端：tun2socks 可用（mihomo 内核不变）"
+    else
+      doctor_warn "FreeBSD TUN 后端不可用：请安装 tun2socks（pkg install -y tun2socks）"
+    fi
   fi
 
   case "$(install_env_tun_safe 2>/dev/null || true)" in
@@ -4576,6 +4581,11 @@ cmd_tun_status() {
   local enabled stack env_type effective_status
 
   prepare
+
+  if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
+    tun_freebsd_status
+    return 0
+  fi
   enabled="$(tun_enabled)"
   stack="$(tun_stack)"
   env_type="$(container_env_type)"
@@ -4621,8 +4631,8 @@ cmd_tun_on() {
   prepare
 
   if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
-    die_state "FreeBSD 当前 mihomo 内核不支持 TUN 功能（上游 sing-tun 库无 FreeBSD 实现）" \
-              "clashctl tun status / tun doctor 可用于查看诊断信息"
+    tun_freebsd_on
+    return $?
   fi
 
   container_mode="$(tun_container_mode 2>/dev/null || echo unknown)"
@@ -4705,6 +4715,11 @@ cmd_tun_off() {
 
   prepare
 
+  if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
+    tun_freebsd_off
+    return $?
+  fi
+
   if ! sync_tun_target_state "off" "false"; then
     return 1
   fi
@@ -4746,17 +4761,15 @@ doctor_tun_checks() {
 
   prepare
 
-  echo
-  echo "🐱 Tun 诊断"
-  echo
-
   if [ "$(get_os 2>/dev/null || echo unknown)" = "freebsd" ]; then
-    echo "🚨 FreeBSD 当前 mihomo 内核不支持 TUN 功能（上游 sing-tun 库无 FreeBSD 实现）"
-    echo "📜 设备存在性与内核能力无关：即使检测到 /dev/tun*，mihomo 也无法在 FreeBSD 上创建 TUN 监听"
-    echo "👉 下一步：FreeBSD 上请继续使用常规代理模式，TUN 相关命令不可用"
+    tun_freebsd_doctor
     trap - ERR
     return 0
   fi
+
+  echo
+  echo "🐱 Tun 诊断"
+  echo
 
   runtime_tun_status="$(tun_runtime_status_text)"
   stack="$(tun_stack)"

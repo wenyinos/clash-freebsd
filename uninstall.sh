@@ -31,6 +31,8 @@ source "$PROJECT_DIR/scripts/core/config.sh"
 source "$PROJECT_DIR/scripts/init/freebsd.sh"
 # shellcheck source=scripts/init/script.sh
 source "$PROJECT_DIR/scripts/init/script.sh"
+# shellcheck source=scripts/core/tun_freebsd.sh
+source "$PROJECT_DIR/scripts/core/tun_freebsd.sh"
 
 init_project_context "$PROJECT_DIR"
 load_env_if_exists
@@ -43,6 +45,11 @@ if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] \
   && ! is_root_user; then
   die_state "FreeBSD rc.d 模式卸载需要 root 权限，当前为普通用户" \
             "请通过 root 用户（su -）重新运行 uninstall.sh"
+fi
+
+if [ "$(get_os 2>/dev/null || true)" = "freebsd" ] \
+  && [ "$(tun_enabled 2>/dev/null || echo false)" = "true" ]; then
+  tun_freebsd_off >/dev/null 2>&1 || true
 fi
 
 service_stop || true
