@@ -53,14 +53,14 @@ pkg install -y bash curl unzip gtar gzip
 su: clashctl: not found
 ```
 
-原因：`su -` 切换到 root 后使用 root 的 `PATH`，通常不包含用户目录（如 `/home/zemin/.local/bin`）。user scope 安装的命令位于该目录。
+原因：`su -` 切换到 root 后使用 root 的 `PATH`，通常不包含用户目录（如 `/home/<用户名>/.local/bin`）。user scope 安装的命令位于该目录。
 
 临时用法（使用绝对路径）：
 
 ```sh
 su -
-/home/zemin/.local/bin/clashctl autostart on
-/home/zemin/.local/bin/clashctl autostart status
+/home/<用户名>/.local/bin/clashctl autostart on
+/home/<用户名>/.local/bin/clashctl autostart status
 ```
 
 永久修复（推荐使用 system scope 安装，命令写入 `/usr/local/bin`）：
@@ -74,8 +74,8 @@ bash install.sh system
 现象（示例）：
 
 ```text
-touch: /home/zemin/clash-freebsd/runtime/runtime-events.env: Permission denied
-override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
+touch: /path/to/clash-freebsd/runtime/runtime-events.env: Permission denied
+override rw-r--r--  root/<用户名> for /path/to/clash-freebsd/.env? (y/n [n])
 ```
 
 原因：以 root 执行 `clashctl` 会把 `.env` 或 `runtime/*` 写成 `root` 属主，后续普通用户执行会权限不足。
@@ -87,8 +87,8 @@ override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
 修复属主（一次性，需要 root）：
 
 ```sh
-chown zemin:zemin /home/zemin/clash-freebsd/.env
-chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
+chown <用户名>:<用户组> /path/to/clash-freebsd/.env
+chown -R <用户名>:<用户组> /path/to/clash-freebsd/runtime
 ```
 
 ## 2. 安装与初始化

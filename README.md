@@ -57,14 +57,14 @@ Symptom:
 su: clashctl: not found
 ```
 
-Cause: `su -` switches to root's `PATH`, which usually does not include user directories (e.g., `/home/zemin/.local/bin`). User-scope installs place commands there.
+Cause: `su -` switches to root's `PATH`, which usually does not include user directories (e.g., `/home/<user>/.local/bin`). User-scope installs place commands there.
 
 Temporary workaround (use absolute path):
 
 ```sh
 su -
-/home/zemin/.local/bin/clashctl autostart on
-/home/zemin/.local/bin/clashctl autostart status
+/home/<user>/.local/bin/clashctl autostart on
+/home/<user>/.local/bin/clashctl autostart status
 ```
 
 Permanent fix (recommended: system-scope install writes to `/usr/local/bin`):
@@ -78,8 +78,8 @@ bash install.sh system
 Symptom (example):
 
 ```text
-touch: /home/zemin/clash-freebsd/runtime/runtime-events.env: Permission denied
-override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
+touch: /path/to/clash-freebsd/runtime/runtime-events.env: Permission denied
+override rw-r--r--  root/<user> for /path/to/clash-freebsd/.env? (y/n [n])
 ```
 
 Cause: Running `clashctl` as root writes `.env` or `runtime/*` with `root` ownership, causing permission issues for subsequent non-root execution.
@@ -91,8 +91,8 @@ Recommendations (least privilege):
 Fix ownership (one-time, requires root):
 
 ```sh
-chown zemin:zemin /home/zemin/clash-freebsd/.env
-chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
+chown <user>:<group> /path/to/clash-freebsd/.env
+chown -R <user>:<group> /path/to/clash-freebsd/runtime
 ```
 
 ## 2. Installation and Initialization
