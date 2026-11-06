@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build source archives
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          version="${tag#v}"
+          tar --exclude=.git --exclude=runtime \
+            -czf "/tmp/clash-freebsd-${version}.tar.gz" .
+          zip -qr "/tmp/clash-freebsd-${version}.zip" . -x ".git/*" -x "runtime/*"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.tag }}" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          version="${tag#v}"
+          gh release create "$tag" \
+            "/tmp/clash-freebsd-${version}.tar.gz" \
+            "/tmp/clash-freebsd-${version}.zip" \
+            --title "clash-freebsd ${version}" \
+            --generate-notes \
+            --verify-tag
