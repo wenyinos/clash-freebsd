@@ -57,6 +57,8 @@ This is a **bash-based deployment and management tool** for Clash/Mihomo proxy o
 - Service name: `clash_freebsd`
 - rc.d script: `/usr/local/etc/rc.d/clash_freebsd`
 - rc.conf: `/etc/rc.conf.d/clash_freebsd`
+- Manual control must use `onestart`/`onestop`/`onerestart` — plain `start`/`stop` are rejected by rc.subr when `*_enable="NO"`
+- rc.d scripts must set `PATH` including `/usr/local/bin` (default rc.d PATH lacks it, breaking `curl`)
 - TUN devices: `/dev/tun*` (not `/dev/net/tun` like Linux)
 
 ## Development Guidelines
@@ -110,7 +112,8 @@ bash install.sh system             # System-scope (requires root)
 ```bash
 clashctl add <url> <name>          # Add subscription
 clashctl use                       # Switch subscription
-clashctl select                    # Switch node
+clashctl select                    # Interactive node switch
+clashctl select <group> <node>     # Non-interactive switch, e.g. clashctl select PROXY DIRECT
 clashon                            # Start proxy
 clashoff                           # Stop proxy
 clashctl doctor                    # Diagnostics
@@ -189,10 +192,12 @@ Fails on: mojibake characters (double-encoded CJK) in `scripts/`, UTF-8 BOM, or 
 
 ## Quirks & Gotchas
 
-### 1. Root vs Non-Root
-- **Root required**: `service`, `autostart`, `tun on/off`
-- **Non-root preferred**: `clashctl config regen`, `clashctl logs`, `clashctl secret`
-- **Warning**: Running `sudo clashctl ...` can cause `.env` ownership drift
+### 1. Root vs Non-Root (Least Privilege)
+- **Root required**: `service`, `autostart`, `clashctl on/off`, `clashctl tun on/off`, `install.sh`, `uninstall.sh`
+- **Regular user supported** (read-only/diagnostic): `clashctl status`, `doctor`, `logs`, `secret`, `ls`, `select`
+- **No `sudo` on FreeBSD**: use `su -` (sudo is not installed by default); script hints say root/`su -`
+- **Warning**: Running CLI as root can cause `.env`/`runtime` ownership drift
+- Status detection uses pidfile + `ps -p` (not `kill -0`) so non-root users can inspect root-owned mihomo
 
 ### 2. Subscription Auto-Update
 Default: `CLASH_AUTO_UPDATE_SUBSCRIPTIONS="true"`

@@ -34,7 +34,7 @@ FreeBSD 默认登录 Shell 可能不是 `bash`，执行以下命令前请先切�
 bash
 ```
 
-建议使用 `root` 或具备 `sudo` 权限账号。
+建议直接使用 `root`（FreeBSD 默认不带 `sudo`，可用 `su -` 切换）。
 
 ```sh
 pkg update
@@ -45,43 +45,31 @@ pkg install -y bash curl unzip gtar gzip
 - 当前脚本通过 `bash` 执行。
 - `freebsd-rc` 后端依赖 `service` 与 `/usr/local/etc/rc.d`。
 
-### 1.1 sudo 找不到 clashctl（PATH 差异）
+### 1.1 su 后找不到 clashctl（PATH 差异）
 
 现象：
 
 ```text
-sudo: clashctl：找不到命令
+su: clashctl: not found
 ```
 
-原因：`sudo` 默认使用 `secure_path`，通常不包含用户目录（如 `/home/zemin/.local/bin`）。
+原因：`su -` 切换到 root 后使用 root 的 `PATH`，通常不包含用户目录（如 `/home/zemin/.local/bin`）。user scope 安装的命令位于该目录。
 
-临时用法（直接可用）：
+临时用法（使用绝对路径）：
 
 ```sh
-sudo /home/zemin/.local/bin/clashctl autostart on
-sudo /home/zemin/.local/bin/clashctl autostart status
+su -
+/home/zemin/.local/bin/clashctl autostart on
+/home/zemin/.local/bin/clashctl autostart status
 ```
 
-永久修复（推荐）：
+永久修复（推荐使用 system scope 安装，命令写入 `/usr/local/bin`）：
 
 ```sh
-sudo visudo
+bash install.sh system
 ```
 
-找到并修改（或新增）：
-
-```text
-Defaults secure_path="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin:/home/zemin/.local/bin"
-```
-
-保存后即可直接使用：
-
-```sh
-sudo clashctl autostart on
-sudo clashctl autostart status
-```
-
-### 1.2 sudo 导致文件属主漂移（.env / runtime）
+### 1.2 root 执行导致文件属主漂移（.env / runtime）
 
 现象（示例）：
 
@@ -90,17 +78,17 @@ touch: /home/zemin/clash-freebsd/runtime/runtime-events.env: Permission denied
 override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
 ```
 
-原因：使用 `sudo clashctl ...` 执行会把 `.env` 或 `runtime/*` 写成 `root` 属主，后续普通用户执行会权限不足。
+原因：以 root 执行 `clashctl` 会把 `.env` 或 `runtime/*` 写成 `root` 属主，后续普通用户执行会权限不足。
 
-建议：
-- 仅对必须 root 的命令使用 `sudo`（如 `service`、`autostart`）。
-- 其他命令（如 `clashctl config regen`、`clashctl secret`、`clashctl logs`）优先使用普通用户执行。
+建议（最小权限）：
+- 仅对必须 root 的命令切换 root：`service`、`autostart`、`clashctl on/off`、`clashctl tun on/off`。
+- 只读与诊断命令直接用普通用户执行：`clashctl status`、`clashctl doctor`、`clashctl logs`、`clashctl secret`、`clashctl ls`、`clashctl select`。
 
-修复属主（一次性）：
+修复属主（一次性，需要 root）：
 
 ```sh
-sudo chown zemin:zemin /home/zemin/clash-freebsd/.env
-sudo chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
+chown zemin:zemin /home/zemin/clash-freebsd/.env
+chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
 ```
 
 ## 2. 安装与初始化
@@ -118,6 +106,7 @@ bash install.sh
 clashctl add <订阅链接> <名称>
 clashctl use
 clashctl select
+clashctl select <策略组> <节点>   # 非交互直接切换，例如 clashctl select PROXY DIRECT
 clashon
 clashctl status
 ```
@@ -127,23 +116,24 @@ clashctl status
 系统安装默认使用 `freebsd-rc` 后端，服务名：`clash_freebsd`。
 
 ```sh
-sudo service clash_freebsd status
-sudo service clash_freebsd start
-sudo service clash_freebsd stop
-sudo service clash_freebsd restart
+service clash_freebsd status
+service clash_freebsd start
+service clash_freebsd stop
+service clash_freebsd restart
 ```
 
 管理内核服务开机自启：
 
 ```sh
-sudo clashctl autostart on
-sudo clashctl autostart status
-sudo clashctl autostart off
+clashctl autostart on
+clashctl autostart status
+clashctl autostart off
 ```
 
 说明：
 - `clashctl autostart on` 只影响 rc.d 服务是否随系统启动。
-- `service` 与 `autostart` 命令需要 root 权限（请使用 root 或 `sudo`）。
+- `service`、`autostart`、`clashctl on/off` 需要 root 权限（请使用 root 或 `su -`）。
+- 即使 autostart 为 off，`clashctl on` / `clashctl off` 仍可手动启停（内部使用 `onestart`/`onestop`）。
 - FreeBSD 自启配置文件：`/etc/rc.conf.d/clash_freebsd`。
 
 ## 4. TUN 模式（FreeBSD 不支持）
@@ -187,7 +177,7 @@ bash uninstall.sh --purge-runtime
 - [ ] 系统时间正确（NTP 正常）
 - [ ] 可访问 GitHub（或已配置镜像/代理）
 - [ ] 依赖已安装：`bash` `curl` `unzip` `gtar` `gzip`
-- [ ] 以 `root`（或 `sudo`）执行安装
+- [ ] 以 `root` 执行安装（`su -`）
 - [ ] 预留端口：`7890`（mixed）、`9090`（controller）、`1053`（dns 可选）
 - [ ] 已确认内核：`mihomo`
 
@@ -211,6 +201,8 @@ clashctl logs mihomo
 route -n get default
 netstat -rn -f inet
 ```
+
+以上诊断命令均为只读，可直接用普通用户执行。
 
 彻底回收：
 

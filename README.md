@@ -38,7 +38,7 @@ The default login shell on FreeBSD may not be `bash`. Switch to `bash` before ru
 bash
 ```
 
-It is recommended to use the `root` account or a user with `sudo` privileges.
+Use the `root` account directly (FreeBSD ships without `sudo` by default; switch with `su -`).
 
 ```sh
 pkg update
@@ -49,43 +49,31 @@ Notes:
 - Scripts are executed via `bash`.
 - The `freebsd-rc` backend depends on `service` and `/usr/local/etc/rc.d`.
 
-### 1.1 sudo Cannot Find clashctl (PATH Mismatch)
+### 1.1 clashctl Not Found After su (PATH Mismatch)
 
 Symptom:
 
 ```text
-sudo: clashctl: command not found
+su: clashctl: not found
 ```
 
-Cause: `sudo` uses `secure_path` by default, which usually does not include user directories (e.g., `/home/zemin/.local/bin`).
+Cause: `su -` switches to root's `PATH`, which usually does not include user directories (e.g., `/home/zemin/.local/bin`). User-scope installs place commands there.
 
-Temporary workaround (works immediately):
+Temporary workaround (use absolute path):
 
 ```sh
-sudo /home/zemin/.local/bin/clashctl autostart on
-sudo /home/zemin/.local/bin/clashctl autostart status
+su -
+/home/zemin/.local/bin/clashctl autostart on
+/home/zemin/.local/bin/clashctl autostart status
 ```
 
-Permanent fix (recommended):
+Permanent fix (recommended: system-scope install writes to `/usr/local/bin`):
 
 ```sh
-sudo visudo
+bash install.sh system
 ```
 
-Locate and modify (or add):
-
-```text
-Defaults secure_path="/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin:/home/zemin/.local/bin"
-```
-
-After saving, you can use directly:
-
-```sh
-sudo clashctl autostart on
-sudo clashctl autostart status
-```
-
-### 1.2 sudo Causes File Ownership Drift (.env / runtime)
+### 1.2 root Execution Causes File Ownership Drift (.env / runtime)
 
 Symptom (example):
 
@@ -94,17 +82,17 @@ touch: /home/zemin/clash-freebsd/runtime/runtime-events.env: Permission denied
 override rw-r--r--  root/zemin for /home/zemin/clash-freebsd/.env? (y/n [n])
 ```
 
-Cause: Running `sudo clashctl ...` writes `.env` or `runtime/*` with `root` ownership, causing permission issues for subsequent non-root execution.
+Cause: Running `clashctl` as root writes `.env` or `runtime/*` with `root` ownership, causing permission issues for subsequent non-root execution.
 
-Recommendations:
-- Use `sudo` only for commands that require root (e.g., `service`, `autostart`).
-- Prefer non-root execution for other commands (e.g., `clashctl config regen`, `clashctl secret`, `clashctl logs`).
+Recommendations (least privilege):
+- Switch to root only for commands that require it: `service`, `autostart`, `clashctl on/off`, `clashctl tun on/off`.
+- Run read-only and diagnostic commands as a regular user: `clashctl status`, `clashctl doctor`, `clashctl logs`, `clashctl secret`, `clashctl ls`, `clashctl select`.
 
-Fix ownership (one-time):
+Fix ownership (one-time, requires root):
 
 ```sh
-sudo chown zemin:zemin /home/zemin/clash-freebsd/.env
-sudo chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
+chown zemin:zemin /home/zemin/clash-freebsd/.env
+chown -R zemin:zemin /home/zemin/clash-freebsd/runtime
 ```
 
 ## 2. Installation and Initialization
@@ -122,6 +110,7 @@ First-time configuration:
 clashctl add <subscription_url> <name>
 clashctl use
 clashctl select
+clashctl select <group> <node>   # non-interactive switch, e.g. clashctl select PROXY DIRECT
 clashon
 clashctl status
 ```
@@ -131,23 +120,24 @@ clashctl status
 The default installation uses the `freebsd-rc` backend. Service name: `clash_freebsd`.
 
 ```sh
-sudo service clash_freebsd status
-sudo service clash_freebsd start
-sudo service clash_freebsd stop
-sudo service clash_freebsd restart
+service clash_freebsd status
+service clash_freebsd start
+service clash_freebsd stop
+service clash_freebsd restart
 ```
 
 Manage kernel service auto-start:
 
 ```sh
-sudo clashctl autostart on
-sudo clashctl autostart status
-sudo clashctl autostart off
+clashctl autostart on
+clashctl autostart status
+clashctl autostart off
 ```
 
 Notes:
 - `clashctl autostart on` only affects whether the rc.d service starts on system boot.
-- `service` and `autostart` commands require root privileges (use root or `sudo`).
+- `service`, `autostart`, and `clashctl on/off` require root privileges (use root or `su -`).
+- Even when autostart is off, `clashctl on` / `clashctl off` still work manually (they use `onestart`/`onestop`).
 - FreeBSD auto-start config file: `/etc/rc.conf.d/clash_freebsd`.
 
 ## 4. TUN Mode (Not Supported on FreeBSD)
@@ -191,7 +181,7 @@ bash uninstall.sh --purge-runtime
 - [ ] System time is correct (NTP functioning)
 - [ ] GitHub is accessible (or mirror/proxy configured)
 - [ ] Dependencies installed: `bash` `curl` `unzip` `gtar` `gzip`
-- [ ] Installation performed as `root` (or with `sudo`)
+- [ ] Installation performed as `root` (switch with `su -`)
 - [ ] Ports reserved: `7890` (mixed), `9090` (controller), `1053` (DNS, optional)
 - [ ] Kernel confirmed: `mihomo`
 
