@@ -11,7 +11,7 @@ This is a **bash-based deployment and management tool** for Clash/Mihomo proxy o
 ## Architecture
 
 ### Directory Structure
-- `scripts/core/` - Main logic (clashctl.sh, config.sh, runtime.sh, common.sh)
+- `scripts/core/` - Main logic (clashctl.sh, config.sh, runtime.sh, common.sh, tun_freebsd.sh)
 - `scripts/init/` - Platform initialization (freebsd.sh, script.sh)
 - `config/` - YAML templates (template.yaml, mixin.yaml, profiles.yaml)
 - `runtime/` - **Gitignored** runtime state, logs, PID files, generated configs
@@ -118,7 +118,8 @@ clashon                            # Start proxy
 clashoff                           # Stop proxy
 clashctl doctor                    # Diagnostics
 clashctl status                    # Status overview
-clashctl tun on|off                # TUN mode
+clashctl tun on|off                # TUN mode (tun2socks backend on FreeBSD)
+clashctl tun status|doctor         # TUN state and diagnostics
 clashctl autostart on|off|status   # FreeBSD boot service
 ```
 
@@ -216,10 +217,12 @@ Downloads use mirror pool with fallback:
 - Logs: `runtime/logs/subconverter.log`
 
 ### 5. TUN Mode Specifics
-- FreeBSD: `/dev/tun*` devices
-- Linux: `/dev/net/tun`
-- Requires root or `NET_ADMIN` capability
-- Auto-route and auto-redirect are Linux-only features
+- mihomo/sing-tun has **no FreeBSD TUN implementation**; the project uses a `tun2socks` backend (`scripts/core/tun_freebsd.sh`)
+- `tun2socks` creates `/dev/tun`, forwards via mihomo SOCKS (`127.0.0.1:7890`)
+- Requires root; `tun on` switches the default route to `tun0`, `tun off` restores it
+- Private nets and proxy server IPs get direct routes to avoid SSH disconnect/loops
+- UDP support depends on the selected proxy node; DNS needs a UDP-capable node
+- Linux-style TUN (`/dev/net/tun`, auto-route, auto-redirect) does not apply here
 
 ### 6. Config Generation Pipeline
 ```

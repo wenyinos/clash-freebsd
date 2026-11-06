@@ -11,6 +11,7 @@
 - `clashctl doctor` 一键诊断
 - FreeBSD `rc.d` 服务托管（`freebsd-rc` 后端）
 - zashboard Web 面板自动下载部署（访问 `http://<ip>:9090/ui`）
+- FreeBSD TUN 支持（`tun2socks` 后端，mihomo 内核保持不变）
 - **下载完整性验证**：SHA256 校验和验证
 
 ## ⌨️ 命令一览
@@ -20,6 +21,7 @@ clashon / clashoff
 clashctl add|use|select|ls
 clashctl status|doctor|logs
 clashctl autostart on|off|status
+clashctl tun on|off|status|doctor
 clashctl config regen
 clashctl update|upgrade
 ```
@@ -136,16 +138,33 @@ clashctl autostart off
 - 即使 autostart 为 off，`clashctl on` / `clashctl off` 仍可手动启停（内部使用 `onestart`/`onestop`）。
 - FreeBSD 自启配置文件：`/etc/rc.conf.d/clash_freebsd`。
 
-## 4. TUN 模式（FreeBSD 不支持）
+## 4. TUN 模式（FreeBSD / tun2socks）
 
-当前 mihomo 内核在 FreeBSD 上不支持 TUN 功能，`clashctl tun on` 会直接报错并提示原因。
+上游 mihomo 内核不含 FreeBSD TUN 实现（sing-tun 仅支持 Linux/Windows/macOS），本项目通过 `tun2socks` 提供 TUN 后端，**mihomo 内核保持不变**。
 
-路由诊断命令仍可使用：
+依赖（安装时自动尝试安装）：
 
 ```sh
-route -n get default
-netstat -rn -f inet
+pkg install -y tun2socks
 ```
+
+命令：
+
+```sh
+clashctl tun status
+clashctl tun doctor
+clashctl tun on
+clashctl tun off
+```
+
+原理：`tun2socks` 创建 `/dev/tun` 设备，把流量经 `socks5://127.0.0.1:7890`（mihomo 混合端口）转发。
+
+注意事项：
+- 需要 root 权限；开启后默认路由切换到 `tun0`。
+- 私有网段（`10/8`、`172.16/12`、`192.168/16`）与代理服务器 IP 会自动添加直连路由，避免 SSH 断连与流量回环。
+- UDP 需要节点支持 UDP；DNS 建议使用支持 UDP 的节点。
+- 可用环境变量调整：`CLASH_TUN_DEVICE`、`CLASH_TUN_ADDR`、`CLASH_TUN_NETMASK`、`CLASH_TUN_EXCLUDE_NETS`。
+- 关闭后自动恢复原默认路由并销毁 TUN 设备。
 
 ## 5. 常用排障命令
 

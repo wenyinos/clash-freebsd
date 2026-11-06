@@ -3,6 +3,8 @@
 > 日期：2026-08-19
 > 分析范围：`scripts/init/freebsd.sh` 全文、`scripts/core/runtime.sh` 全文、`config.sh`/`clashctl.sh`/`common.sh` 中全部 FreeBSD 分支、`install.sh`/`uninstall.sh` 入口，并核实上游 mihomo v1.19.23 / metacubex/sing-tun v0.4.17 / subconverter v0.9.0 的源码与发布资产。
 > 结论：**发现 3 个严重错误、3 个中等问题、3 个轻微问题**。
+>
+> **2026-11-06 更新**：本报告中的 TUN 相关问题已解决。FreeBSD TUN 现由 `scripts/core/tun_freebsd.sh` 提供 `tun2socks` 后端实现（mihomo 内核保持不变），`clashctl tun on/off/status/doctor` 可用。其余问题已在 1.0.0 前后修复。
 
 ---
 

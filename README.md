@@ -15,6 +15,7 @@ Other languages: [🇨🇳 简体中文](README.zh.md)
 - One-click diagnostics with `clashctl doctor`
 - FreeBSD `rc.d` service management (`freebsd-rc` backend)
 - zashboard Web panel auto-download and deploy (visit `http://<ip>:9090/ui`)
+- FreeBSD TUN support (`tun2socks` backend; mihomo kernel unchanged)
 - **Download integrity verification** with SHA256 checksums
 
 ## ⌨️ Command Overview
@@ -24,6 +25,7 @@ clashon / clashoff
 clashctl add|use|select|ls
 clashctl status|doctor|logs
 clashctl autostart on|off|status
+clashctl tun on|off|status|doctor
 clashctl config regen
 clashctl update|upgrade
 ```
@@ -140,16 +142,33 @@ Notes:
 - Even when autostart is off, `clashctl on` / `clashctl off` still work manually (they use `onestart`/`onestop`).
 - FreeBSD auto-start config file: `/etc/rc.conf.d/clash_freebsd`.
 
-## 4. TUN Mode (Not Supported on FreeBSD)
+## 4. TUN Mode (FreeBSD / tun2socks)
 
-The current mihomo kernel does not support TUN on FreeBSD; `clashctl tun on` will fail with an explicit message.
+Upstream mihomo has no FreeBSD TUN implementation (sing-tun supports Linux/Windows/macOS only). This project provides a TUN backend via `tun2socks`; **the mihomo kernel is unchanged**.
 
-Route diagnostics still work:
+Dependency (installed automatically during setup):
 
 ```sh
-route -n get default
-netstat -rn -f inet
+pkg install -y tun2socks
 ```
+
+Commands:
+
+```sh
+clashctl tun status
+clashctl tun doctor
+clashctl tun on
+clashctl tun off
+```
+
+How it works: `tun2socks` creates a `/dev/tun` device and forwards traffic through `socks5://127.0.0.1:7890` (mihomo mixed port).
+
+Notes:
+- Root privileges required; the default route is switched to `tun0`.
+- Private networks (`10/8`, `172.16/12`, `192.168/16`) and proxy server IPs get direct routes to prevent SSH disconnects and loops.
+- UDP requires nodes that support UDP; prefer UDP-capable nodes for DNS.
+- Tunables: `CLASH_TUN_DEVICE`, `CLASH_TUN_ADDR`, `CLASH_TUN_NETMASK`, `CLASH_TUN_EXCLUDE_NETS`.
+- Turning TUN off restores the original default route and destroys the TUN device.
 
 ## 5. Common Troubleshooting Commands
 
