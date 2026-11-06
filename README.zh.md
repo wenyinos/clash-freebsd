@@ -161,7 +161,7 @@ clashctl tun off
 
 注意事项：
 - 需要 root 权限；开启后默认路由切换到 `tun0`。
-- 私有网段（`10/8`、`172.16/12`、`192.168/16`）与代理服务器 IP 会自动添加直连路由，避免 SSH 断连与流量回环。
+- 私有网段（`10/8`、`172.16/12`、`192.168/16`）、当前 SSH 对端与代理服务器 IP 会自动添加直连路由，避免 SSH 断连与流量回环。
 - UDP 需要节点支持 UDP；DNS 建议使用支持 UDP 的节点。
 - 可用环境变量调整：`CLASH_TUN_DEVICE`、`CLASH_TUN_ADDR`、`CLASH_TUN_NETMASK`、`CLASH_TUN_EXCLUDE_NETS`。
 - 关闭后自动恢复原默认路由并销毁 TUN 设备。

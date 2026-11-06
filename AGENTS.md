@@ -220,7 +220,7 @@ Downloads use mirror pool with fallback:
 - mihomo/sing-tun has **no FreeBSD TUN implementation**; the project uses a `tun2socks` backend (`scripts/core/tun_freebsd.sh`)
 - `tun2socks` creates `/dev/tun`, forwards via mihomo SOCKS (`127.0.0.1:7890`)
 - Requires root; `tun on` switches the default route to `tun0`, `tun off` restores it
-- Private nets and proxy server IPs get direct routes to avoid SSH disconnect/loops
+- Private nets, the active SSH peer, and proxy server IPs get direct routes to avoid SSH disconnect/loops
 - UDP support depends on the selected proxy node; DNS needs a UDP-capable node
 - Linux-style TUN (`/dev/net/tun`, auto-route, auto-redirect) does not apply here
 

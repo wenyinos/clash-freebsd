@@ -113,6 +113,22 @@ $("$(yq_bin)" eval '.proxies[].server // ""' "$config_file" 2>/dev/null || true)
 EOF
 }
 
+tun_freebsd_ssh_peer_ips() {
+  {
+    if [ -n "${SSH_CONNECTION:-}" ]; then
+      printf '%s\n' "${SSH_CONNECTION%% *}"
+    fi
+
+    netstat -an -p tcp 2>/dev/null \
+      | awk '$6 == "ESTABLISHED" && $4 ~ /[.]22$/ {print $5}' \
+      | sed -E 's/\.[0-9]+$//'
+
+    who 2>/dev/null | awk '{print $NF}' | tr -d '()'
+  } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' \
+    | grep -Ev '^(127\.|0\.0\.0\.0$)' \
+    | sort -u
+}
+
 tun_freebsd_add_direct_routes() {
   local gateway="$1"
   local route_file net ip
@@ -135,6 +151,16 @@ EOF
     fi
   done <<EOF
 $(tun_freebsd_proxy_server_ips)
+EOF
+
+  # 保护当前 SSH 会话（含公网客户端），避免切换默认路由后断连
+  while IFS= read -r ip; do
+    [ -n "${ip:-}" ] || continue
+    if route add -host "$ip" "$gateway" >/dev/null 2>&1; then
+      printf '%s\n' "-host $ip $gateway" >> "$route_file"
+    fi
+  done <<EOF
+$(tun_freebsd_ssh_peer_ips)
 EOF
 }
 

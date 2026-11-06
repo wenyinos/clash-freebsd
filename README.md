@@ -165,7 +165,7 @@ How it works: `tun2socks` creates a `/dev/tun` device and forwards traffic throu
 
 Notes:
 - Root privileges required; the default route is switched to `tun0`.
-- Private networks (`10/8`, `172.16/12`, `192.168/16`) and proxy server IPs get direct routes to prevent SSH disconnects and loops.
+- Private networks (`10/8`, `172.16/12`, `192.168/16`), the active SSH peer, and proxy server IPs get direct routes to prevent SSH disconnects and loops.
 - UDP requires nodes that support UDP; prefer UDP-capable nodes for DNS.
 - Tunables: `CLASH_TUN_DEVICE`, `CLASH_TUN_ADDR`, `CLASH_TUN_NETMASK`, `CLASH_TUN_EXCLUDE_NETS`.
 - Turning TUN off restores the original default route and destroys the TUN device.
