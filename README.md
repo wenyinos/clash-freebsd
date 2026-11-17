@@ -9,7 +9,7 @@ Other languages: [🇨🇳 简体中文](README.zh.md)
 
 ## ✨ Core Features
 
-- mihomo kernel installed via `pkg` (version tracks the pkg repository)
+- mihomo kernel installed via `pkg` (version follows the pkg repository; default quarterly, may lag upstream latest)
 - Multi-subscription management and node switching (clash format only)
 - Mixin patch mechanism
 - One-click diagnostics with `clashctl doctor`

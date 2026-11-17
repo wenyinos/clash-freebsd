@@ -5,7 +5,7 @@
 
 ## ✨ 核心特性
 
-- mihomo 内核通过 `pkg` 安装，版本以 pkg 仓库为准（自动保持最新）
+- mihomo 内核通过 `pkg` 安装，版本以 pkg 仓库为准（默认 quarterly，可能滞后上游 latest）
 - 多订阅管理与节点切换（仅支持 clash 格式订阅）
 - Mixin 补丁机制
 - `clashctl doctor` 一键诊断

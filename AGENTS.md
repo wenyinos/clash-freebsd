@@ -30,8 +30,10 @@ This is a **bash-based deployment and management tool** for Clash/Mihomo proxy o
 
 **Bundled tools** (auto-downloaded if missing):
 - `yq` v4.52.4 - YAML processor (heavily used throughout)
-- `mihomo` v1.19.23 - Proxy kernel (recommended)
 - `subconverter` v0.9.0 - Subscription converter
+
+**pkg-managed**:
+- `mihomo` - Proxy kernel (version follows the pkg repo; default quarterly, may lag upstream latest)
 
 ### Port Allocation
 - `7890` - Mixed proxy port (HTTP/SOCKS5)
